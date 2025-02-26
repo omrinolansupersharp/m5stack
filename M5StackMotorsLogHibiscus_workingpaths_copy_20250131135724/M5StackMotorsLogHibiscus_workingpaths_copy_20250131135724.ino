@@ -1,4 +1,5 @@
 
+
 #include "M5Unified.h"
 #include "M5GFX.h"
 #include "M5Module4EncoderMotor.h"
@@ -62,12 +63,12 @@ const float telarms_backlash_down[5] = {0, 0, 0, 0, 0};
 
 const float ksteps[46] = {0,121021,221163,305109,376940,440183,497853,552492,606213,660732,717411,777289,841114,909380,
 982353,1060100,1142518,1229358,1285195,1327558,1369921,1408632,1447342,1486053,1524763,1563474,1602185,1640895,1679606,
-1718316,1757027,1914786,2072545,2230304,2388063,2545822,2703581,2861340,3019099,3135149,3251199,3279416,3307634,3335851,3378552,3392286};
+1718316,1757027,1914786,2072545,2230304,2388063,2545822,2703581,2861340,3019099,3135149,3251199,3279416,3307634};//,3335851,3378552,3392286};
 
 
 const float lsteps[46]= {0,66016,132031,198047,264063,330079,396095,462110,528126,594142,660157,726173,792189,858204,
 924221,990236,1056252,1122268,1188283,1254299,1320315,1386330,1452346,1518362,1584378,1650394,1716409,1782425,1848441,1914456,1980472,
-2046488,2112504,2178520,2244535,2310551,2376567,2442582,2508598,2609157,2761530,2855948,2907763,2942306,2991050,3022523};
+2046488,2112504,2178520,2244535,2310551,2376567,2442582,2508598,2609157,2761530,2855948,2907763};//,2942306,2991050,3022523};
 
 // Old retraction paths - top of the petal maybe clashes with frame
 /*
@@ -248,6 +249,8 @@ void setup() {
 
 }
 
+
+
 void loop() {
 M5.update();
 pollCurrents();
@@ -257,6 +260,7 @@ LogCurrents("Loop");
 
 
  // put your main code here, to run repeatedly:
+
 if (Serial.available())
 {
   cmd = Serial.readStringUntil('\n');;
@@ -270,8 +274,7 @@ if (cmd[0] == '1'){
   deployPetal(1);
   deployPetal(2);
   deployPetal(3);
-  deployPetal(4);
-  
+  deployPetal(4);  
 }
 
 //Retract Petals
@@ -280,54 +283,76 @@ if (cmd[0] == '2'){
   retractPetal(1);
   retractPetal(2);
   retractPetal(3);
-  retractPetal(4);
-  
+  retractPetal(4);  
 }
 
 //Deploy telescopic arms
 if (cmd[0] == '3'){
+  deployTelArms(-3,3);
+  /*
   //1375875388
-  deployTelArms(450,3);
-  deployTelArms(450,3);
-  deployTelArms(450,3);
+  // Need to account for petal deployment after a little bit of top arm deployment
+  deployTelArms(-450,3);
+  deployTelArms(-450,3);
+  deployTelArms(-450,3);
   deployTelArms(450,2);
   deployTelArms(450,2);
-  deployTelArms(450,2);
-  
+  deployTelArms(450,2);  
   TripTelMotors(2, 1, 50);
   TripTelMotors(3, 1, 50); 
+  */
 }
 
 // Retract telescopic arms
 if (cmd[0] == '4'){
 
-  retractTelArms(3);
-  TripTelMotors(3, 0, 50);
-  retractTelArms(2);
-  TripTelMotors(2, 0, 50);
+  retractTelArms(6,3);
+  //TripTelMotors(3, 0, 50);
+  //retractTelArms(450,2);
+  //TripTelMotors(2, 0, 50);
   
 }
 
-//Deploy all 
+//Deploy all (from full retraction)
 if (cmd[0] == '5'){
-  deployPetal(0);
+  deployTelArms(-200,3); // first move the top tel arms out to clear path for petals
+  deployPetal(0); // then deploy petals
   deployPetal(1);
   deployPetal(2);
   deployPetal(3);
   deployPetal(4);
+  deployTelArms(-1100,3); // then deploy the arms to the top
+  TripTelMotors(3, 1, 50);
+  deployTelArms(1300,2);
   TripTelMotors(2, 1, 50);
-  TripTelMotors(3, 1, 50); 
+  Serial.println("Fully deployed");
 }
 
-// Retract all
+// Retract all (from full deployment)
 if (cmd[0] == '6'){
+  deployTelArms(-1300,2);
   TripTelMotors(2, 0, 50);
-  TripTelMotors(3, 0, 50);
+  deployTelArms(1000,3); 
+  //waitForSerialInput('\n');  // Wait for serial input (Enter key) before proceeding
   retractPetal(0);
+  //waitForSerialInput('\n');
   retractPetal(1);
+  //waitForSerialInput('\n');
   retractPetal(2);
+  //waitForSerialInput('\n');
   retractPetal(3);
+  //waitForSerialInput('\n');
   retractPetal(4); 
+  deployTelArms(300,3);
+  TripTelMotors(3, 0, 50);
+  Serial.println("Fully retracted");
+}
+
+//custom command to balance arms
+if (cmd[0]=='7'){
+  int  motor_cmd = cmd[1]-'0';
+  int direction = cmd[2]-'0';
+  BalanceArms(motor_cmd, direction);
 }
 
 // cmd polls encoders 'E'
@@ -370,9 +395,9 @@ MoveMotor(driver_cmd, motor_cmd, speed_cmd);
 }
 
 
-if (cmd[0] == 'S'){
-   Stop();
-   }
+//if (cmd[0] == 's'){
+//   Stop();
+//   }
 
 if (cmd[0] == 'L'){
   log_mode = cmd[1]-'0';
@@ -466,7 +491,7 @@ if (cmd[0] == 'Q'){
   //int end_ind_cmd = cmd.indexOf('\n');
   //String enc_str_cmd = (cmd.substring(1,end_ind_cmd));
   //int32_t  enc_cmd = enc_str_cmd.toInt();
-  retractTelArms(tel_arm_stage);
+  retractTelArms(2,tel_arm_stage);
   }
 
 
@@ -606,6 +631,12 @@ TripTelMotors(int motor_cmd, int direction, int trip_current){
     currents[i] = GetCurrentValue(drivers[i]);
     if(abs(currents[i]) > trip_current){
       MoveMotor(drivers[i], motor_cmd, 0);
+      //MoveMotor(0, motor_cmd, 0);
+      //MoveMotor(1, motor_cmd, 0);
+      //MoveMotor(2, motor_cmd, 0);
+      //MoveMotor(3, motor_cmd, 0);
+      //MoveMotor(4, motor_cmd, 0);
+      //MvTArmMotors(motor_cmd,0);
       test[i] = 1;
       Serial.println(currents[i]);
       Serial.println(drivers[i]);
@@ -690,8 +721,22 @@ pollEncoders();
 LogParams("MoveMotorPair");
 }
 
-void MoveTelArms(int32_t pos,int tel_arm_stage, int trip_current=50){
-  //int tel_arm_stage = 2;
+void BalanceArms(int motor, int direction){
+  MoveMotor(2, 3, -127);
+  MoveMotor(2, 2, 127);
+  MoveMotor(3, 3, -127);
+  MoveMotor(3, 2, 127);
+  MoveMotor(4, 3, -127);
+  MoveMotor(4, 2, 127);
+  MoveMotor(0, 3, -127);
+  MoveMotor(0, 2, 127);
+}
+
+
+int MoveTelArms(int32_t pos,int tel_arm_stage){
+  int trip_current=50; // this is crucial, this is the trip current that we use for the majority of the movement, needs to be enough to overcome minor jams
+  Serial.print("Target position is: ");
+  Serial.println(pos);
   pollCurrents();
   pollEncoders();
   String mv_tel_cmd = "MoveTelArms Trip: "+String(trip_current);
@@ -699,26 +744,49 @@ void MoveTelArms(int32_t pos,int tel_arm_stage, int trip_current=50){
   int32_t start[5] = {0,0,0,0,0};
   int32_t live_pos[5] = {0,0,0,0,0};
   int32_t steps[5] = {0,0,0,0,0};
-  int speeds[5] = {127,127,127,127,127};
+  int speeds[5] = {-127,-127,-127,-127,-127}; // tel arm deployment is negative current for move motor
+  int direction = 1; // default direction is deployment
   int test[5] = {0,0,0,0,0};
   int sumtest = 0;
   int trip = 0;
   for (uint8_t i = 0; i < 5; i++) {
     start[i] = GetEncoderValue(i,tel_arm_stage);
+    Serial.print("Start position is: ");
+    Serial.print(start[i]);
+    Serial.print(" for motor ");
+    Serial.println(i);
     live_pos[i] = start[i];
     steps[i] = pos - start[i];
-    if(steps[i]<0){
-      speeds[i] = -127;
-    }
+    //if(steps[i]>0){
+    //  if(tel_arm_stage=3){ // top tel arm stage encoder values go down and become negative as arm deploys
+    //    direction = 0; // therefore positive steps means that the top arm stage is retracting
+    //    speeds[i] = 127;
+    //  }
+    //}
+    if(steps[i]>0){
+        direction = 0; // positive steps means that the arm is retracting
+        speeds[i] = 127;
+        }
     }
       for (uint8_t i = 0; i < 5; i++) {
     MoveMotor(i, tel_arm_stage, speeds[i]);
       }
   while(sumtest !=5){
     for (uint8_t i = 0; i < 5; i++) {
-  live_pos[i] = GetEncoderValue(i, tel_arm_stage);
-  currents[i] = GetCurrentValue(i);
-  if(abs(currents[i])> trip_current){
+      pollCurrents();
+      pollEncoders();
+      live_pos[i] = GetEncoderValue(i, tel_arm_stage);
+      currents[i] = GetCurrentValue(i);
+
+  if(((abs(live_pos[i]))-abs(start[i]))> abs(steps[i])){ // encoder count reached for one motor
+    MoveMotor(i, tel_arm_stage, 0);
+    test[i] = 1;
+    Serial.print("Motor ");
+    Serial.print(i);
+    Serial.print(" encoder is at: ");
+    Serial.println(live_pos[i]);
+  }
+  if(abs(currents[i])> trip_current){ // current tripped for one motor - all motors stop and trip returned
     MoveMotor(0, tel_arm_stage, 0);
     MoveMotor(1, tel_arm_stage, 0);
     MoveMotor(2, tel_arm_stage, 0);
@@ -731,12 +799,17 @@ void MoveTelArms(int32_t pos,int tel_arm_stage, int trip_current=50){
     Serial.println(" mA");
     trip = 5;
   }
-  if(abs(live_pos[i]-start[i])> abs(steps[i])){
-    MoveMotor(i, tel_arm_stage, 0);
-    test[i] = 1;
+  if (Serial.available() > 0 && Serial.read() == 'c'){ // manual stop - all motors stop and trip returned
+    MoveMotor(0, tel_arm_stage, 0);
+    MoveMotor(1, tel_arm_stage, 0);
+    MoveMotor(2, tel_arm_stage, 0);
+    MoveMotor(3, tel_arm_stage, 0);
+    MoveMotor(4, tel_arm_stage, 0);
+    Serial.println("Manual stop");
+    trip = 5;
   }  
 }
-if(trip==0){
+if(trip==0){ // while the motor is not tripped, set the sum test to be 
   LogParams(mv_tel_cmd);
   sumtest = test[0]+test[1]+test[2]+test[3]+test[4];
 }
@@ -744,11 +817,46 @@ else{
   LogParams(mv_tel_cmd);
   sumtest = trip;
 }
-  }
-LogParams(mv_tel_cmd);
+pollCurrents();
+pollEncoders();
+/*
+if(sumtest==5){ //after all encoder values are the same check that all arms are caught up to each other - do we need this if we are already driving up to a certain encoder value?
+int32_t maxVal = 0;
+for (uint8_t i = 0; i < 5; i++) {
+  if (live_pos[i] > maxVal) {
+        maxVal = live_pos[i];
+      }
+}
+for (uint8_t i = 0; i < 5; i++){
+    // if any motors are lagging behind the maximum value
+    if (live_pos[i] < (maxVal)){
+      int32_t steps = live_pos[i] - maxVal;
+      int32_t start = live_pos[i];
+      Serial.print("Steps: ");
+      Serial.println(steps);
+      Serial.print("start: ");
+      Serial.println(start);
+      MoveMotor(i, tel_arm_stage, 127);
+      int test = 0;
+      while (test !=1){
+        int32_t live_pos_corr = GetEncoderValue(i, tel_arm_stage);
+        if(abs(live_pos_corr - start) > abs(steps)){
+          MoveMotor(i, tel_arm_stage, 0);
+          test = 1;
+          Serial.println(" Correction completed ");
+          }
+        }
+    }
+}
+}
+*/
+}
 pollCurrents();
 pollEncoders();
 LogParams(mv_tel_cmd);
+Serial.println(sumtest);
+Serial.println(trip);
+return trip; // finished, trip will either be 0 if move has completed smoothly or 5 if there is a current trip or keyboard interrupt
 }
 
 
@@ -814,6 +922,7 @@ pollEncoders();
 LogParams(mv_tel_cmd);
 return trip;}
 
+
 void MoveTelArms3(int32_t Ecdr, int tel_arm_stage, int32_t direction){
   //int tel_arm_stage = 2;
   pollCurrents();
@@ -835,6 +944,7 @@ void MoveTelArms3(int32_t Ecdr, int tel_arm_stage, int32_t direction){
         for (uint8_t i = 0; i < 4; i++) {
           live_pos[i] = GetEncoderValue(i, tel_arm_stage);
           MoveMotor(i, tel_arm_stage, current);
+          
           
           if(abs(live_pos[i]-start[i])> abs(Ecdr)){
             MoveMotor(i, tel_arm_stage, 0);
@@ -909,11 +1019,70 @@ pollEncoders();
 LogParams("MoveTelArms4");
 }
 
+
+void 
+MoveTelArms5(int motor_cmd, int direction, int ecdr){
+  //tel_arm_stage,direction,ecdr
+  int32_t start[5] = {0,0,0,0,0};
+  int32_t live_pos[5] = {0,0,0,0,0};
+  for (uint8_t i = 0; i < 5; i++){
+    GetEncoderValue(i, motor_cmd);
+    start[i] = GetEncoderValue(i, motor_cmd);
+    }
+  /*
+  for (uint8_t i = 0; i < 5; i++) {
+    live_pos[i] = GetEncoderValue(i, motor_cmd);
+    Serial.print("motor ");
+    Serial.print(i);
+    Serial.print(" : Encoder Value ");
+    Serial.println(live_pos[i]);
+  }
+  */
+  pollCurrents();
+  pollEncoders();
+  int drivers[5] = {0,1,2,3,4};
+  LogParams("MoveTelArms4");
+  if( direction == 0){
+  MvTArmMotors(motor_cmd, 127);
+  }
+  if( direction == 1){
+  MvTArmMotors(motor_cmd, -127); }
+  int test[5] = {0, 0,0,0,0};
+  int sumtest = 0;
+  delay(300);
+  while(sumtest <5){
+          for (uint8_t i = 0; i < 5; i++) {
+    currents[i] = GetCurrentValue(drivers[i]);
+    GetEncoderValue(i, motor_cmd);
+    live_pos[i] = GetEncoderValue(i, motor_cmd);
+    if(abs(live_pos[i]-start[i]) > ecdr){
+      MoveMotor(i, motor_cmd, 0);
+      test[i] = 1;
+      Serial.println(currents[i]);
+      Serial.println(i);
+    }
+    GetEncoderValue(i, motor_cmd);
+    live_pos[i] = GetEncoderValue(i, motor_cmd);
+    /*
+    Serial.print("motor ");
+    Serial.print(i);
+    Serial.print(" : Encoder Value ");
+    Serial.println(live_pos[i]);
+    */
+}
+LogParams("MoveTelArms4");
+sumtest = test[0]+test[1]+test[2]+test[3]+test[4];
+}
+pollCurrents();
+pollEncoders();
+LogParams("MoveTelArms4");
+}
+
 void deployTelArms(int n, int tel_arm_stage ){
 //int tel_arm_stage = 2;
 pollCurrents();
 pollEncoders();
-LogParams("DeployTelArms "+String(n*1000000)+" Steps");
+//LogParams("DeployTelArms "+String(n*1000000)+" Steps");
 zeroEncoder(0, tel_arm_stage);
 zeroEncoder(1, tel_arm_stage);
 zeroEncoder(2, tel_arm_stage);
@@ -921,26 +1090,25 @@ zeroEncoder(3, tel_arm_stage);
 zeroEncoder(4, tel_arm_stage);
 pollCurrents();
 pollEncoders();
-/*
 LogParams("DeployTelArms");
-  int trip_test = 0;
-  for(uint8_t i = 0; i < n; i++){
-    trip_test = MoveTelArms(i*1000000, tel_arm_stage);
-    if(trip_test == 5){
-      break;
-    }
+int trip_test = 0;
+for(int32_t i = -1; i > n-1; i--){
+  int trip_test = MoveTelArms(i*100000, tel_arm_stage);
+  if(trip_test == 5){
+    Serial.println("Current tripped or keyboard interrupt");
+    break;
   }
-  */
+} 
 pollCurrents();
 pollEncoders();
 LogParams("DeployTelArms");
 }
 
-void retractTelArms(int tel_arm_stage){
+void retractTelArms(int n, int tel_arm_stage){
 //int tel_arm_stage = 2;
 pollCurrents();
 pollEncoders();
-LogParams("RetractTelArms");//+String(n*1000000)+" Steps");
+LogParams("RetractTelArms"+String(n*1000000)+" Steps");
 zeroEncoder(0, tel_arm_stage);
 zeroEncoder(1, tel_arm_stage);
 zeroEncoder(2, tel_arm_stage);
@@ -950,22 +1118,24 @@ int32_t encoder;
 int32_t live_pos[5] = {0,0,0,0,0};
 pollCurrents();
 pollEncoders();
-//LogParams("RetractTelArms");
-/*
+LogParams("RetractTelArms");
   int trip_test = 0;
-  for(uint8_t i = 0; i < n+1; i++){
-    trip_test = MoveTelArms(i*-1000000);
+  for(int8_t i = 1; i < n+1; i++){
+    trip_test = MoveTelArms(i*1000000,tel_arm_stage);
     if(trip_test == 5){
       break;
     }
   }
-*/
+pollCurrents();
+pollEncoders();
+}
+/*
 for (uint8_t i = 0; i < 5; i++) {
   live_pos[i] = GetEncoderValue(i, tel_arm_stage);
   Serial.println(live_pos[i]);
 }
 //while encoder position less than max
-while(live_pos[1] <= 6*1000000){
+while(live_pos[1] <= n*1000000){
   for (uint8_t i = 0; i < 5; i++) {
     live_pos[i] = GetEncoderValue(i, tel_arm_stage);
     }
@@ -973,11 +1143,11 @@ while(live_pos[1] <= 6*1000000){
   MoveTelArms4(tel_arm_stage, 0, 1 * 1000000);
   
   // find the max value of the arm encoders so that we can check one is not running away and skewing the average
-  //int32_t maxVal = 0;
+  int32_t maxVal = 0;
   for (uint8_t i = 0; i < 5; i++) {
-    //if (live_pos[i] > maxVal) {
-    //      maxVal = live_pos[i];
-    //    }
+    if (live_pos[i] > maxVal) {
+          maxVal = live_pos[i];
+        }
     
     live_pos[i] = GetEncoderValue(i, tel_arm_stage);
     Serial.print(" live position is ");
@@ -985,16 +1155,17 @@ while(live_pos[1] <= 6*1000000){
     Serial.print(" for motor ");
     Serial.println(i);
     }
-  
+  Serial.print("Maximum Encoder Reading: ");
+  Serial.println(maxVal);
   // Find average encoder position of arms
-  int32_t avg_pos = (live_pos[0] + live_pos[1] + live_pos[2] + live_pos[3] + live_pos[4])/5;
-  Serial.print("avg position is ");
-  Serial.println(avg_pos);
+  //int32_t avg_pos = (live_pos[0] + live_pos[1] + live_pos[2] + live_pos[3] + live_pos[4])/5;
+  //Serial.print("avg position is ");
+  //Serial.println(avg_pos);
   
   for (uint8_t i = 0; i < 5; i++){
-    // if any motors are lagging
-    if (live_pos[i] < (avg_pos - 5000)){
-      int32_t steps = live_pos[i] - avg_pos;
+    // if any motors are lagging behind the maximum value
+    if (live_pos[i] < (maxVal)){
+      int32_t steps = live_pos[i] - maxVal;
       int32_t start = live_pos[i];
       Serial.print("Steps: ");
       Serial.println(steps);
@@ -1022,6 +1193,7 @@ while(live_pos[1] <= 6*1000000){
     
 
     //if any motors are rushing
+    
     if (live_pos[i] > (avg_pos + 5000)){
       int32_t steps = live_pos[i] - avg_pos;
       int32_t start = avg_pos;
@@ -1047,14 +1219,15 @@ while(live_pos[1] <= 6*1000000){
         Serial.println(i);
     }
     }
+    
 
-    int32_t avg_pos = (live_pos[0] + live_pos[1] + live_pos[2] + live_pos[3] + live_pos[4])/5;
-    }
+    //int32_t avg_pos = (live_pos[0] + live_pos[1] + live_pos[2] + live_pos[3] + live_pos[4])/5;
+    //}
     
   
       
     // if any motors are ahead
-    /*
+    
     if (live_pos[i]< avg_pos - 60000){
       int32_t steps = live_pos[i] - avg_pos;
       int32_t start = avg_pos;
@@ -1071,11 +1244,9 @@ while(live_pos[1] <= 6*1000000){
       
   }
   */
-}
-Serial.print(" Telescopic arms fully retracted ");
-pollCurrents();
-pollEncoders();
-}
+
+
+
 
 
 void deployPetal(int petal){
@@ -1105,10 +1276,10 @@ else{
   min_speed=95;
 }
 MovePairMotors(driver_k, motor_k, ksteps[step], driver_l, motor_l, lsteps[step], min_speed);}
-//TripMotor(driver_l, motor_l,0, 90);
-//TripMotor(driver_k, motor_k,0, 90);
-TripMotor(driver_l, motor_k,0, 1000);
-TripMotor(driver_k, motor_l,0, 1000);
+TripMotor(driver_l, motor_l,0, 500);
+TripMotor(driver_k, motor_k,0, 500);
+TripMotor(driver_l, motor_l,0, 1000);
+TripMotor(driver_k, motor_k,0, 1000);
 pollCurrents();
 pollEncoders();
 LogParams(log_cmd);
@@ -1142,8 +1313,8 @@ else{
   min_speed=95;
 }
 MovePairMotors(driver_k, motor_k, -1*ksteps_rtn[step], driver_l, motor_l, -1*lsteps_rtn[step], min_speed);}
-//TripMotor(driver_l, motor_l,1, 80);
-//TripMotor(driver_k, motor_k,1, 80);
+TripMotor(driver_l, motor_l,1, 500);
+TripMotor(driver_k, motor_k,1, 500);
 TripMotor(driver_l, motor_l,1, 1000);
 TripMotor(driver_k, motor_k,1, 1000);
 pollCurrents();
@@ -1470,4 +1641,29 @@ void LogCurrents(String active_cmd){
   char char_line_to_add[line_to_add.length()+1];
   line_to_add.toCharArray(char_line_to_add, line_to_add.length()+1);
   appendFile(SD, log_file_buffer, char_line_to_add);
+
 }
+
+
+/*
+void waitForSerialInput(char expectedInput) {
+  while (true) {
+    if (Serial.available() > 0) {
+      char input = Serial.read();
+      if (input == expectedInput) {
+        break; // Exit the loop when the expected input is received
+      }
+    }
+  }
+}
+*/
+void serialEvent() {
+  while (Serial.available()) {
+    char input = Serial.read();
+    if (input == 'S') { // 's' is the stop command
+      Stop();
+      Serial.println("All motors stopped: Restart when ready");
+    }
+  }
+}
+
