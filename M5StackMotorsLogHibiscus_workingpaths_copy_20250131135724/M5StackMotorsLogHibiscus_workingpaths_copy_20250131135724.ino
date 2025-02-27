@@ -1,5 +1,4 @@
 
-
 #include "M5Unified.h"
 #include "M5GFX.h"
 #include "M5Module4EncoderMotor.h"
@@ -288,7 +287,8 @@ if (cmd[0] == '2'){
 
 //Deploy telescopic arms
 if (cmd[0] == '3'){
-  deployTelArms(-3,3);
+  //int target = cmd.indexOf('\n'); // needs to be a negative number int to work
+  deployTelArms(-100,3);
   /*
   //1375875388
   // Need to account for petal deployment after a little bit of top arm deployment
@@ -306,7 +306,7 @@ if (cmd[0] == '3'){
 // Retract telescopic arms
 if (cmd[0] == '4'){
 
-  retractTelArms(6,3);
+  retractTelArms(100,3);
   //TripTelMotors(3, 0, 50);
   //retractTelArms(450,2);
   //TripTelMotors(2, 0, 50);
@@ -1093,7 +1093,7 @@ pollEncoders();
 LogParams("DeployTelArms");
 int trip_test = 0;
 for(int32_t i = -1; i > n-1; i--){
-  int trip_test = MoveTelArms(i*100000, tel_arm_stage);
+  int trip_test = MoveTelArms(i*10000000, tel_arm_stage);
   if(trip_test == 5){
     Serial.println("Current tripped or keyboard interrupt");
     break;
@@ -1108,7 +1108,7 @@ void retractTelArms(int n, int tel_arm_stage){
 //int tel_arm_stage = 2;
 pollCurrents();
 pollEncoders();
-LogParams("RetractTelArms"+String(n*1000000)+" Steps");
+//LogParams("RetractTelArms"+String(n*1000000)+" Steps");
 zeroEncoder(0, tel_arm_stage);
 zeroEncoder(1, tel_arm_stage);
 zeroEncoder(2, tel_arm_stage);
@@ -1121,13 +1121,15 @@ pollEncoders();
 LogParams("RetractTelArms");
   int trip_test = 0;
   for(int8_t i = 1; i < n+1; i++){
-    trip_test = MoveTelArms(i*1000000,tel_arm_stage);
+    trip_test = MoveTelArms(i*10000000,tel_arm_stage);
     if(trip_test == 5){
+      Serial.println("Current tripped or keyboard interrupt");
       break;
     }
   }
 pollCurrents();
 pollEncoders();
+LogParams("RetractTelArms");
 }
 /*
 for (uint8_t i = 0; i < 5; i++) {
