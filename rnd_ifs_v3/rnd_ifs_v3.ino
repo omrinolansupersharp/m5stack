@@ -28,6 +28,10 @@ Motor A up direction is +
 Motor B up direction is +
 Motoc C up direction is -
 
+Example command:
+G1X0.8Y0Z0F20 - turns the x motor one revolution in the positive direction in 3.2 seconds
+G1X-0.8Y0Z0F20 - turns the x motor one revolution in the positive direction in 3.2 seconds
+
 */
 #include <M5Stack.h>
 #include "Module_GRBL_13.2.h"
@@ -54,20 +58,16 @@ void setup() {
 
 void loop() {
     String cmd = ""; // Declare cmd at the beginning of the loop
-
     if (Serial.available()) {
         // Read the serial input
         Serial.println("");
         cmd = Serial.readStringUntil('\n');
         Serial.println("cmd: " + cmd);
-
-        move_all_motors(cmd);
+        //move_all_motors(cmd);
     }
 
     long startTime = millis();
-
     bool isIdle = _GRBL_B.readIdle();
-
     if (!isIdle && wasIdle) {
         // System just became not idle
         notIdleStartTime = millis();
@@ -76,10 +76,8 @@ void loop() {
         // System just became idle
         long notIdleEndTime = millis();
         long notIdleDuration = notIdleEndTime - notIdleStartTime;
-
         Serial.print("Time until idle: ");
         Serial.println(notIdleDuration);
-
         wasIdle = true;
     }
 
@@ -87,6 +85,33 @@ void loop() {
         delay(delay_new_move); // Delay for 500 milliseconds
 
     }
+
+
+    if (cmd[0] == "a"){
+      move_all_motors("G1X-0.8Y0Z0F100"); // move x motor one turn to the left in 3.2 s
+    }
+
+    if (cmd[0] == "d"){
+      move_all_motors("G1X0.8Y0Z0F100"); // move x motor one turn to the right in 3.2 s
+    }
+
+    if (cmd[0] == "w"){
+      move_all_motors("G1X0Y0.8Z0F100"); // move y motor one turn upwards in 3.2 s
+    }
+
+    if (cmd[0] == "s"){
+      move_all_motors("G1X0Y-0.8Z0F100"); // move y motor one turn downwards in 3.2 s
+    }
+    if (cmd[0] == "r"){
+      move_all_motors("G1X0Y0Z0.8F100"); // move z motor one turn upwards in 3.2 s
+    }
+    if (cmd[0] == "f"){
+      move_all_motors("G1X0Y0Z-0.8F100"); // move z motor one turn downwards in 3.2 s
+    }
+    else{
+      move_all_motors(cmd);
+    }
+
 }
 
 void move_all_motors(String command) {
