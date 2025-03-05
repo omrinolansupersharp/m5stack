@@ -59,7 +59,7 @@ float currents[5] = {0.0,0.0,0.0,0.0,0.0};
 float voltages[5] = {0.0,0.0,0.0,0.0,0.0};
 int32_t encoder_readings[5][4] = {{0,0,0,0}, {0,0,0,0}, {0,0,0,0}, {0,0,0,0}, {0,0,0,0}};
 int start_force = 0;
-int petal_trip_tests[5];
+int petal_trip_tests[5] = {0, 0, 0, 0, 0};
 const float telarms_backlash_down[5] = {0, 0, 0, 0, 0};
 
 
@@ -283,7 +283,7 @@ if (cmd[0] == '1'){
 //Retract Petals
 if (cmd[0] == '2'){
   bool ready = false;  
-  for (uint8_t i = 0; i < 1; i++) {
+  for (uint8_t i = 0; i < 5; i++) {
     Serial.print("Locks need to be manually disengaged before proceeding with retraction for petal: ");
     Serial.println(i);
     Serial.print("Disengage and press Enter when ready");
@@ -299,29 +299,20 @@ if (cmd[0] == '2'){
 
 //Deploy telescopic arms
 if (cmd[0] == '3'){
-  int  telarmstage = cmd[1]-'0';
-  int trip_test = deployTelArms(-137,telarmstage);
+  int telarmstage = cmd[1]-'0';
+  int trip_test = deployTelArms(-125,telarmstage);
   if (trip_test<6){
   TripTelMotors(telarmstage, 1, 70);
   }
-  /*
+  
   //1375875388
-  // Need to account for petal deployment after a little bit of top arm deployment
-  deployTelArms(-450,3);
-  deployTelArms(-450,3);
-  deployTelArms(-450,3);
-  deployTelArms(450,2);
-  deployTelArms(450,2);
-  deployTelArms(450,2);  
-  TripTelMotors(2, 1, 50);
-  TripTelMotors(3, 1, 50); 
-  */
+
 }
 
 // Retract telescopic arms
 if (cmd[0] == '4'){
   int  telarmstage = cmd[1]-'0';
-  int trip_test = retractTelArms(137,telarmstage);
+  int trip_test = retractTelArms(125,telarmstage);
   if (trip_test<6){
   TripTelMotors(telarmstage, 0, 70);
   }
@@ -333,20 +324,25 @@ if (cmd[0] == '4'){
 
 //Deploy all (from full retraction)
 if (cmd[0] == '5'){
-  //deployTelArms(-200,3); // first move the top tel arms out to clear path for petals
+  int trip_test = 0;
+  while(trip_test < 5){
+    trip_test = deployTelArms(-20,3);// first move the top tel arms out to clear path for petals
   for (int i = 0; i < 5; i++) {
-    petal_trip_tests[i] = deployPetal(i);
+    trip_test = deployPetal(i);
   }
-  //deployTelArms(-1100,3); // then deploy the arms to the top
-  //TripTelMotors(3, 1, 50);
-  //deployTelArms(1300,2);
-  //TripTelMotors(2, 1, 50);
+  trip_test = deployTelArms(-105,3); // then deploy the arms to the top
+  trip_test = TripTelMotors(3, 1, 50);
+  trip_test = deployTelArms(125,2);
+  trip_test = TripTelMotors(2, 1, 50);
   Serial.println("Fully deployed");
+  trip_test = 5;
+  }
+  Serial.println("Deployment manually stopped");
 }
 
 // Retract all (from full deployment)
 if (cmd[0] == '6') {
-  int arm_trip_test = deployTelArms(-1300, 2);
+  int arm_trip_test = deployTelArms(-125, 2);
   //TripTelMotors(2, 0, 50);
   //deployTelArms(1000, 3); 
   bool ready = false;  
@@ -491,15 +487,28 @@ if (cmd[0] == 'R'){
   zeroEncoder(1,2);
   zeroEncoder(2,2);
   zeroEncoder(3,2);
-  if(direction == 1){
-  MoveTelArms2(telarms_backlash_down[0], telarms_backlash_down[1], telarms_backlash_down[2], telarms_backlash_down[3], telarms_backlash_down[4]);}
-  if(direction == 0){
-  MoveTelArms2(-1*telarms_backlash_down[0], -1*telarms_backlash_down[1], -1*telarms_backlash_down[2], -1*telarms_backlash_down[3], -1*telarms_backlash_down[4]);}
+  //if(direction == 1){
+  //MoveTelArms2(telarms_backlash_down[0], telarms_backlash_down[1], telarms_backlash_down[2], telarms_backlash_down[3], telarms_backlash_down[4]);}
+  //if(direction == 0){
+  //MoveTelArms2(-1*telarms_backlash_down[0], -1*telarms_backlash_down[1], -1*telarms_backlash_down[2], -1*telarms_backlash_down[3], -1*telarms_backlash_down[4]);}
+  //}
   }
 
 if (cmd[0] == 'U'){
   int  petal = cmd[1]-'0';
-  retractPetal(petal);
+  bool ready = false;
+  Serial.print("Locks need to be manually disengaged before proceeding with retraction for petal: ");
+  Serial.println(petal);
+  Serial.print("Disengage and press Enter when ready");
+  for (uint8_t i = 0; i < 1; i++) {
+  if (Serial.available() > 0 && Serial.read() == '\n') {  // Wait for serial input (Enter key) before proceeding
+    ready = true;
+  }
+  if (ready == true) {  
+    petal_trip_tests[petal] = retractPetal(petal);
+    ready = false;
+  }
+  }
   }
 
 
@@ -562,8 +571,8 @@ void Stop(){
   LogParams("Stop");
 }
 
-void MoveMotor(int driver_cmd, int motor_cmd, int speed){
- if (driver_cmd == 0){
+void MoveMotor(int driver_cmd, int motor_cmd, int speed){ 
+  if (driver_cmd == 0){
   driverA.setMode(motor_cmd, NORMAL_MODE);
   driverA.setMotorSpeed(motor_cmd, speed);}
   
@@ -582,6 +591,7 @@ void MoveMotor(int driver_cmd, int motor_cmd, int speed){
    if (driver_cmd == 4){
   driverE.setMode(motor_cmd, NORMAL_MODE);
   driverE.setMotorSpeed(motor_cmd, speed);}
+
 }
 
 void MvTArmMotors(int motor_cmd, int speed){
@@ -680,7 +690,7 @@ TripTelMotors(int motor_cmd, int direction, int trip_current){
     MoveMotor(3, tel_arm_stage, 0);
     MoveMotor(4, tel_arm_stage, 0);
     Serial.println("Manual stop");
-    trip = 5;
+    trip = 6;
     }
     GetEncoderValue(drivers[i], motor_cmd);
     live_pos[i] = GetEncoderValue(drivers[i], motor_cmd);
@@ -762,12 +772,12 @@ int MovePairMotors(int driver_k, int motor_k, int32_t pos_k, int driver_l, int m
   if(abs(currents[driver_l])> 1000){
     MoveMotor(driver_l, motor_l, 0);
     MoveMotor(driver_k, motor_k, 0);
-    trip = 2;
+    trip = 3;
   }
   if(abs(currents[driver_k])> 1000){
     MoveMotor(driver_l, motor_l, 0);
     MoveMotor(driver_k, motor_k, 0);
-    trip = 2;
+    trip = 3;
   }
   if (Serial.available() > 0 && Serial.read() == 'c'){
     MoveMotor(driver_l, motor_l, 0);
@@ -792,6 +802,7 @@ return sumtest;
 }
 
 void BalanceArms(int motor, int direction){
+  // need to implement the direction changing the direction of this movement
   MoveMotor(2, 3, -127);
   MoveMotor(2, 2, 127);
   MoveMotor(3, 3, -127);
@@ -940,7 +951,7 @@ Serial.println(trip);
 return trip; // finished, trip will either be 0 if move has completed smoothly or 5 if there is a current trip or keyboard interrupt
 }
 
-
+/*
 int MoveTelArms2(int32_t pos0, int32_t pos1, int32_t pos2, int32_t pos3, int32_t pos4){
   int tel_arm_stage = 2;
   pollCurrents();
@@ -1051,7 +1062,7 @@ MoveTelArms4(int motor_cmd, int direction, int ecdr){
     GetEncoderValue(i, motor_cmd);
     start[i] = GetEncoderValue(i, motor_cmd);
     }
-  /*
+  
   for (uint8_t i = 0; i < 5; i++) {
     live_pos[i] = GetEncoderValue(i, motor_cmd);
     Serial.print("motor ");
@@ -1059,7 +1070,7 @@ MoveTelArms4(int motor_cmd, int direction, int ecdr){
     Serial.print(" : Encoder Value ");
     Serial.println(live_pos[i]);
   }
-  */
+  
   pollCurrents();
   pollEncoders();
   int drivers[5] = {0,1,2,3,4};
@@ -1085,12 +1096,12 @@ MoveTelArms4(int motor_cmd, int direction, int ecdr){
     }
     GetEncoderValue(i, motor_cmd);
     live_pos[i] = GetEncoderValue(i, motor_cmd);
-    /*
+    
     Serial.print("motor ");
     Serial.print(i);
     Serial.print(" : Encoder Value ");
     Serial.println(live_pos[i]);
-    */
+    
 }
 LogParams("MoveTelArms4");
 sumtest = test[0]+test[1]+test[2]+test[3]+test[4];
@@ -1110,7 +1121,7 @@ MoveTelArms5(int motor_cmd, int direction, int ecdr){
     GetEncoderValue(i, motor_cmd);
     start[i] = GetEncoderValue(i, motor_cmd);
     }
-  /*
+  
   for (uint8_t i = 0; i < 5; i++) {
     live_pos[i] = GetEncoderValue(i, motor_cmd);
     Serial.print("motor ");
@@ -1118,7 +1129,7 @@ MoveTelArms5(int motor_cmd, int direction, int ecdr){
     Serial.print(" : Encoder Value ");
     Serial.println(live_pos[i]);
   }
-  */
+  
   pollCurrents();
   pollEncoders();
   int drivers[5] = {0,1,2,3,4};
@@ -1144,12 +1155,12 @@ MoveTelArms5(int motor_cmd, int direction, int ecdr){
     }
     GetEncoderValue(i, motor_cmd);
     live_pos[i] = GetEncoderValue(i, motor_cmd);
-    /*
+    
     Serial.print("motor ");
     Serial.print(i);
     Serial.print(" : Encoder Value ");
     Serial.println(live_pos[i]);
-    */
+    
 }
 LogParams("MoveTelArms4");
 sumtest = test[0]+test[1]+test[2]+test[3]+test[4];
@@ -1158,6 +1169,8 @@ pollCurrents();
 pollEncoders();
 LogParams("MoveTelArms4");
 }
+
+*/
 
 int deployTelArms(int n, int tel_arm_stage ){
 //int tel_arm_stage = 2;
@@ -1363,11 +1376,12 @@ if (knextStep != -1) {
         Serial.print("The next step larger than the current position is: ");
         Serial.println(knextStep);
         nextstep = (knextStep);
-    } else {
-        Serial.println("petal is already fully deployed");
-        trip_test = 2;
+    } 
+    //else {
+    //    Serial.println("petal is already fully deployed");
+    //    trip_test = 2;
         //break;
-    }
+    //}
 pollCurrents();
 pollEncoders();
 LogParams(log_cmd);
@@ -1380,14 +1394,14 @@ for (int step = nextstep; step < (ksize+1); step++){
     min_speed=95;
   }
   trip_test = MovePairMotors(driver_k, motor_k, ksteps[step], driver_l, motor_l, lsteps[step], min_speed);
-  if(trip_test > 1){
+  if(trip_test > 2){
     Serial.println("Current tripped or keyboard interrupt");
     break;
   }
   Serial.print(step);
   Serial.println(trip_test);
 }
-if(trip_test > 3){ // if the path finished without manual interruption
+if(trip_test < 3){ // if the path finished without manual interruption
 TripMotor(driver_l, motor_l,0, 500);
 TripMotor(driver_k, motor_k,0, 500);
 TripMotor(driver_l, motor_l,0, 1000);
@@ -1419,18 +1433,19 @@ LogParams(log_cmd);
 int32_t live_pos[2] = {0,0};
 live_pos[0] = GetEncoderValue(driver_k,motor_k);
 live_pos[1] = GetEncoderValue(driver_l,motor_l);
-int krtnnextStep = findNextStep(ksteps_rtn, ksize, live_pos[0]);
-int lrtnnextStep = findNextStep(lsteps_rtn, lsize, live_pos[1]);
+int krtnnextStep = findNextStep(ksteps_rtn, ksize, -1* live_pos[0]);
+int lrtnnextStep = findNextStep(lsteps_rtn, lsize, -1* live_pos[1]);
 int rtnnextstep = 0;
 if (krtnnextStep != -1) {
         Serial.print("The next step larger than the current position is: ");
         Serial.println(krtnnextStep);
         rtnnextstep = (krtnnextStep);
-    } else {
-        Serial.println("petal is already fully deployed");
-        trip_test = 2;
+    } 
+    //else {
+    //    Serial.println("petal is already fully deployed");
+    //    trip_test = 2;
         //break;
-    }
+    //}
 for (int step = rtnnextstep; step < (krtnsize+1); step++){
 //  mvAsteps(motor_k, 0, ksteps[step]);
 //  mvAsteps(motor_l, 0, lsteps*0.025*(step+1));
@@ -1448,7 +1463,7 @@ if(trip_test > 1){
     break;
 }
 }
-if(trip_test > 3){ // if the path finished without manual interruption then trip to the end of the loop
+if(trip_test < 3){ // if the path finished without manual interruption then trip to the end of the loop
 TripMotor(driver_l, motor_l,1, 500);
 TripMotor(driver_k, motor_k,1, 500);
 TripMotor(driver_l, motor_l,1, 1000);
