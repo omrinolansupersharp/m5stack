@@ -59,8 +59,19 @@ void button_pressed(void)
         }
 
         if (cursor == 6) {
-            M5.Speaker.tone(NOTE_DH2, 200);
-          Stop();
+            // custom
+            //MoveMotor(2,0,127);
+            //delay(1500);
+            showFireworks(5000);
+            screen_update();
+        }
+
+        if (cursor == 7) {
+          smiley_face();
+          delay(1500);
+
+          //M5.Speaker.tone(NOTE_DH2, 200);
+          //Stop();
         }
 
 }

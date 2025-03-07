@@ -86,27 +86,34 @@ void loop() {
 
     }
 
+    // int speed = 10; variable to change to change the speed of execution
 
-    if (cmd[0] == "a"){
+    if (cmd[0] == 'a'){
       move_all_motors("G1X-0.8Y0Z0F100"); // move x motor one turn to the left in 3.2 s
     }
 
-    if (cmd[0] == "d"){
+    if (cmd[0] == 'd'){
       move_all_motors("G1X0.8Y0Z0F100"); // move x motor one turn to the right in 3.2 s
     }
 
-    if (cmd[0] == "w"){
+    if (cmd[0] == 'w'){
       move_all_motors("G1X0Y0.8Z0F100"); // move y motor one turn upwards in 3.2 s
     }
 
-    if (cmd[0] == "s"){
+    if (cmd[0] == 's'){
       move_all_motors("G1X0Y-0.8Z0F100"); // move y motor one turn downwards in 3.2 s
     }
-    if (cmd[0] == "r"){
-      move_all_motors("G1X0Y0Z0.8F100"); // move z motor one turn upwards in 3.2 s
+    if (cmd[0] == 'r'){
+      move_all_motors("G1X0Y0Z-0.8F100"); // move z motor one turn upwards in 3.2 s
     }
-    if (cmd[0] == "f"){
-      move_all_motors("G1X0Y0Z-0.8F100"); // move z motor one turn downwards in 3.2 s
+    if (cmd[0] == 'f'){
+      move_all_motors("G1X0Y0Z0.8F100"); // move z motor one turn downwards in 3.2 s
+    }
+    if (cmd[0] == '+'){
+      move_all_motors("G1X0.8Y0.8Z-0.8F100"); // move all motors one turn upwards in 3.2 s
+    }
+    if (cmd[0] == '-'){
+      move_all_motors("G1X-0.8Y-0.8Z0.8F100"); // move all motors one turn downwards in 3.2 s
     }
     else{
       move_all_motors(cmd);

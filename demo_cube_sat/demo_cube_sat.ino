@@ -136,7 +136,7 @@ void loop() {
     if (M5.BtnA.wasPressed()) {
         cursor -= 1;
         if (cursor < 0) {
-            cursor = 6;
+            cursor = 7;
         }
     screen_update();
     }
@@ -156,16 +156,14 @@ delay(50);
 //    if button C pressed
     if (M5.BtnC.wasPressed()) {
         cursor += 1;
-        if (cursor > 6) {
+        if (cursor > 7) {
             cursor = 0;
         }
     screen_update();
     }
 
     M5.update();
-
-
-
-
-
 }
+
+
+
