@@ -39,6 +39,7 @@ G1X-0.8Y0Z0F20 - turns the x motor one revolution in the positive direction in 3
 #include "M5Module4EncoderMotor.h"
 #include "Unit_RTC.h"
 
+
 #define PaHub_I2C_ADDRESS (0x77)
 ClosedCube::Wired::TCA9548A tca9548a;
 // here we manually define the i2c and pahub addresses for each of the motors
@@ -82,28 +83,32 @@ int32_t encoder_readings[5][3] = {{0,0,0}, {0,0,0}, {0,0,0}, {0,0,0}, {0,0,0}};
 void setup() {
     M5.begin();
     M5.Power.begin();
-    M5.Display.begin();
-    M5.Display.setTextColor(WHITE);
-    M5.Display.setTextDatum(top_center);
-    M5.Display.setFont(&fonts::FreeSansBold12pt7b);
-    M5.Display.setTextSize(1);
 
+    M5.Lcd.setTextSize(8);
+    //M5.Lcd.setFont(&FreeSansBold12pt7b);
+    M5.Lcd.setCursor(50, 100); // Set cursor position to (50, 100)
+    M5.Lcd.print("Hello, M5Stack!");
 
     Wire.begin(21, 22);
     tca9548a.address(PaHub_I2C_ADDRESS);  // Set the I2C address
 
+    tca9548a.selectChannel(0);
     _GRBL_0.Init(&Wire); // No return value to check
     _GRBL_0.setMode("distance");
 
+    tca9548a.selectChannel(0);
     _GRBL_1.Init(&Wire); // No return value to check
     _GRBL_1.setMode("distance");
 
+    tca9548a.selectChannel(1);
     _GRBL_2.Init(&Wire); // No return value to check
     _GRBL_2.setMode("distance");
 
+    tca9548a.selectChannel(1);
     _GRBL_3.Init(&Wire); // No return value to check
     _GRBL_3.setMode("distance");
 
+    tca9548a.selectChannel(2);
     _GRBL_4.Init(&Wire); // No return value to check
     _GRBL_4.setMode("distance");
 
@@ -185,7 +190,15 @@ void loop() {
     if (cmd[0] == 'G'){
       move_all_motors(cmd,petal);
     }
-
+    if (cmd[0] == '?'){
+      move_all_motors(cmd,petal);
+    }
+    if (cmd[0] == '$'){
+      move_all_motors(cmd,petal);
+    }
+    String data = Serial.readString();
+    Serial.println(data);
+    
 }
 
 void move_all_motors(String command, int petal) {
@@ -203,12 +216,9 @@ void move_all_motors(String command, int petal) {
         {3,1, &_GRBL_3},
         {4,2, &_GRBL_4}
     };
-    if (petal >= 0 && petal < 5) {
         tca9548a.selectChannel(petalMap[petal].pahub_address);
         petalMap[petal].motor->sendGcode(buffer);
-    } else {
-        Serial.println("Invalid petal number");
-    }
+
 }
 
 /*
