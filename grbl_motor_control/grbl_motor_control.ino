@@ -198,7 +198,7 @@ void setup() {
 }
 
 void loop() {
-    update();
+    update(petal,pos); // function to update screen
 
     String cmd = ""; // Declare cmd at the beginning of the loop
     if (Serial.available()) {
@@ -216,19 +216,16 @@ void loop() {
       Serial.println(petal);
     }
 
-    // Query position
+    // Query position - returns the three encoder values of the active petal
     if (cmd[0] == 'Q'){
-      Serial.println("The current position is: ");
-      for (int i = 0; i < 5; ++i) {
-        for (int j = 0; j < 3; ++j) {
-            Serial.print(pos[i][j]);
-            Serial.print(",");
-        }
-      }
-      Serial.println(" ");
+      //Serial.println("The current position is: ");
+      for (int j = 0; j < 3; ++j) {
+            Serial.print(pos[petal][j], 6);
+            if (j < 2) Serial.print(",");
+    }
     }
 
-    // Reset encoder positions
+    // Reset encoder positions to 0
     if (cmd[0] == 'R'){
       int newValues[5][3] = {{0, 0, 0}, {0, 0, 0}, {0, 0, 0}, {0, 0, 0}, {0, 0, 0}};
       for (int i = 0; i < 5; ++i) {
@@ -239,14 +236,13 @@ void loop() {
       savePosArray(SD, "/pos.txt");
     } 
 
-    // Set encoder positions e.g. "S 1,2,3 4,5,6 7,8,9 10,11,12 13,14,15"
+    // Set a specific encoder position e.g. "S(petal)(motor)(position float)
     if (cmd[0] == 'S'){
-      int newValues[5][3] = {{0, 0, 0}, {0, 0, 0}, {0, 0, 0}, {0, 0, 0}, {0, 0, 0}};
-      for (int i = 0; i < 5; ++i) {
-        for (int j = 0; j < 3; ++j) {
-            pos[i][j] = newValues[i][j];
-        }
-      }
+      int petal_cmd = cmd[1]-'0';
+      int motor_cmd = cmd[2]-'0';
+      String valueString = cmd.substring(3);
+      float newValue = valueString.toFloat();
+      pos[petal_cmd][motor_cmd] = newValue;
       savePosArray(SD, "/pos.txt");
     } 
 
@@ -254,12 +250,20 @@ void loop() {
     if (cmd[0] == 'I'){
       int  petal_cmd = petal;//(cmd[1]-'0');
       if (petal_cmd >= 0 && petal_cmd < 5) {
-            bool isIdle = petalMap[petal_cmd].motor->readIdle();
+        auto idleStatus = petalMap[petal_cmd].motor->readIdle();
+        // Check if idleStatus is a boolean
+        if (idleStatus == 0 || idleStatus == 1) {
+            bool isIdle = (idleStatus == 0); // Convert to boolean
             Serial.print("Motor idle status: ");
             Serial.println(isIdle); // Debugging statement
         } else {
+            Serial.println("Invalid return type from readIdle()"); // Error handling
+        }
+        }
+         else {
             Serial.println("Invalid petal command"); // Debugging statement
         }
+    
     }
 
     // reading encoders - need to save until we actually have encoders
@@ -312,9 +316,7 @@ void move_all_motors(String command, int petal) {
         // Send the command to the selected petal motor
         petalMap[petal].motor->sendGcode(buffer);
         Serial.println("G-code command sent"); // Debugging statement
-        
-        
-        while (!petalMap[petal].motor->readIdle()) {
+        //while (!petalMap[petal].motor->readIdle()) {
           /*
         // Wait for motor to become idle before finishing move
         // we don't wanna do this because we want to return to the loop
@@ -329,8 +331,8 @@ void move_all_motors(String command, int petal) {
             break;
           }
           */
-          delay(10);
-        }
+          //delay(100);
+        //}
     } else {
         Serial.println("Motor is not connected"); // Debugging statement
     } 
@@ -423,7 +425,7 @@ void readpos(float pos[5][3]) {
   preferences.end(); // Close preferences
 }
 
-void update(){
+void update(int petal,float pos[5][3]){
   delay(wait);
   // Clear the area where the values are printed
   M5.Lcd.fillRect(20, 80, 200, 20, BLACK); // Clear petal value
@@ -435,11 +437,11 @@ void update(){
   M5.Lcd.setCursor(20, 80);  
   M5.Lcd.print(petal);
   M5.Lcd.setCursor(20, 140);  
-  M5.Lcd.print(pos[petal][0]);
+  M5.Lcd.print(pos[petal][0],4);
   M5.Lcd.setCursor(100, 140);
-  M5.Lcd.print(pos[petal][1]);
+  M5.Lcd.print(pos[petal][1],4);
   M5.Lcd.setCursor(180, 140);
-  M5.Lcd.print(pos[petal][2]);
+  M5.Lcd.print(pos[petal][2],4);
 
 }
 
@@ -545,6 +547,7 @@ void loadPosArray(fs::FS &fs, const char * path) {
 
     stringToPosArray(data, pos);
 }
+
 
 
 
