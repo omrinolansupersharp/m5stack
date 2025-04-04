@@ -102,8 +102,8 @@ Unit_RTC RTC;
 rtc_time_type RTCtime;
 rtc_date_type RTCdate;
 unsigned long previousMillis = 0;
-const long interval = 10; // Interval to check motor status (in milliseconds)
-unsigned long timeout = 5000; // Timeout period (in milliseconds)
+const long interval = 100; // Interval to check motor status (in milliseconds)
+unsigned long timeout = 500; // Timeout period (in milliseconds)
 unsigned long startTime = millis();
 
 
@@ -118,7 +118,7 @@ float initialPos[5][3] = {
     {0.000000, 0.000000, 0.000000}
 };
 float conv = 0.004; // conversion between GCode X1 and distance moved by screw
-int wait = 300; //scren refresh time in ms
+int wait = 100; //scren refresh time in ms
 
 void setup() {
     M5.begin();
@@ -198,22 +198,20 @@ void setup() {
 }
 
 void loop() {
-    update(petal,pos); // function to update screen
-
+    update(petal,pos);
     String cmd = ""; // Declare cmd at the beginning of the loop
     if (Serial.available()) {
         // Read the serial input
         Serial.println("");
         cmd = Serial.readStringUntil('\n');
-        Serial.println(cmd); 
+        //Serial.println(cmd); 
         delay(10);      
     
-
     // changing petal number
     if (cmd[0] == 'P'){
       petal = cmd[1]-'0';
-      Serial.print("Active Petal changed to: ");
-      Serial.println(petal);
+      //Serial.print("Active Petal changed to: ");
+      //Serial.println(petal);
     }
 
     // Query position - returns the three encoder values of the active petal
@@ -247,23 +245,28 @@ void loop() {
     } 
 
     // Checking if Idle
-    if (cmd[0] == 'I'){
-      int  petal_cmd = petal;//(cmd[1]-'0');
-      if (petal_cmd >= 0 && petal_cmd < 5) {
-        auto idleStatus = petalMap[petal_cmd].motor->readIdle();
-        // Check if idleStatus is a boolean
-        if (idleStatus == 0 || idleStatus == 1) {
-            bool isIdle = (idleStatus == 0); // Convert to boolean
-            Serial.print("Motor idle status: ");
-            Serial.println(isIdle); // Debugging statement
+    if (cmd[0] == 'I') {
+    int petal_cmd = petal; // (cmd[1] - '0');
+
+    if (petal_cmd >= 0 && petal_cmd < 5) {
+        // Check if the motor is connected
+        if (petalMap[petal_cmd].motor != nullptr) {
+            auto idleStatus = petalMap[petal_cmd].motor->readIdle();
+            // Check if idleStatus is a boolean
+            if (idleStatus == 0 || idleStatus == 1) {
+                bool isIdle = (idleStatus == 0); // Convert to boolean
+                //String idleStatusString = isIdle ? "true" : "false"; // Convert to string
+                //Serial.println("Motor idle status: " + idleStatusString); // Debugging statement
+                //delay(10);
+            } else {
+                //Serial.println("Invalid return type from readIdle()"); // Error handling
+            }
         } else {
-            Serial.println("Invalid return type from readIdle()"); // Error handling
+            //Serial.println("Motor not connected"); // Motor connection check
         }
-        }
-         else {
-            Serial.println("Invalid petal command"); // Debugging statement
-        }
-    
+    } else {
+        //Serial.println("Invalid petal command"); // Debugging statement
+    }
     }
 
     // reading encoders - need to save until we actually have encoders
@@ -273,7 +276,6 @@ void loop() {
       int32_t enc  = GetEncoderValue(petal_cmd, motor_cmd);
       Serial.println(enc);
     }
-
     if (cmd[0] == 'G'){ // move motor command
       //bool 
       move_all_motors(cmd,petal);
@@ -288,7 +290,7 @@ void loop() {
       savePosArray(SD, "/pos.txt");
     }
     
-    
+   
 }   
 }
 // END OF LOOP
@@ -310,14 +312,16 @@ void move_all_motors(String command, int petal) {
     tca9548a.selectChannel(petalMap[petal].pahub_address);
     Serial.print("Selected PAHub channel: ");
     Serial.println(petalMap[petal].pahub_address); // Debugging statement
-
+    petalMap[petal].motor->sendGcode(buffer);
+    Serial.println("G-code command sent");
+    /*
     // Check if the motor is connected by calling the isMotorConnected function
     if (isMotorConnected(petalMap[petal].motor)) {
         // Send the command to the selected petal motor
         petalMap[petal].motor->sendGcode(buffer);
         Serial.println("G-code command sent"); // Debugging statement
         //while (!petalMap[petal].motor->readIdle()) {
-          /*
+          
         // Wait for motor to become idle before finishing move
         // we don't wanna do this because we want to return to the loop
           unsigned long currentMillis = millis();        
@@ -330,18 +334,20 @@ void move_all_motors(String command, int petal) {
             Serial.println("Timeout reached, exiting loop.");
             break;
           }
-          */
+          
           //delay(100);
         //}
     } else {
         Serial.println("Motor is not connected"); // Debugging statement
     } 
+    */
     //update pos variable
     pos[petal][0] += (x * conv);
     pos[petal][1] += (y * conv);
     pos[petal][2] += (z * conv);
     savePosArray(SD, "/pos.txt");
 }
+
 
 /*
 void set_all_motors(int x = 0, int y = 0, int z = 0, int speed = 300, int petal = 0) {
@@ -387,8 +393,8 @@ bool isMotorConnected(Module_GRBL* motor) { // this is currently not working - n
 
         // Read the response from the motor
         String response = motor->readLine();
-        Serial.print("Motor response: ");
-        Serial.println(response); // Debugging statement
+        //Serial.print("Motor response: ");
+        //Serial.println(response); // Debugging statement
 
         // Check if the response contains "ok" and does not contain corrupted data
         if (response.length() > 0 && response.indexOf("�") == -1 ) { //&& response.indexOf("ok") != -1
@@ -426,7 +432,6 @@ void readpos(float pos[5][3]) {
 }
 
 void update(int petal,float pos[5][3]){
-  delay(wait);
   // Clear the area where the values are printed
   M5.Lcd.fillRect(20, 80, 200, 20, BLACK); // Clear petal value
   M5.Lcd.fillRect(20, 140, 60, 20, BLACK); // Clear pos[petal][0]
@@ -437,21 +442,21 @@ void update(int petal,float pos[5][3]){
   M5.Lcd.setCursor(20, 80);  
   M5.Lcd.print(petal);
   M5.Lcd.setCursor(20, 140);  
-  M5.Lcd.print(pos[petal][0],4);
-  M5.Lcd.setCursor(100, 140);
-  M5.Lcd.print(pos[petal][1],4);
-  M5.Lcd.setCursor(180, 140);
-  M5.Lcd.print(pos[petal][2],4);
-
+  M5.Lcd.print(pos[petal][0],5);
+  M5.Lcd.setCursor(120, 140);
+  M5.Lcd.print(pos[petal][1],5);
+  M5.Lcd.setCursor(220, 140);
+  M5.Lcd.print(pos[petal][2],5);
+  delay(10);
 }
 
 // read file from sd card
 void readFile(fs::FS &fs, const char * path){ 
-    Serial.printf("Reading file: %s\n", path);
+    //Serial.printf("Reading file: %s\n", path);
 
     File file = fs.open(path);
     if(!file){
-        Serial.println("Failed to open file for reading");
+        //Serial.println("Failed to open file for reading");
         return;
     }
 
@@ -464,17 +469,17 @@ void readFile(fs::FS &fs, const char * path){
 
 // write file to sd card
 void writeFile(fs::FS &fs, const char * path, const char * message){
-    Serial.printf("Writing file: %s\n", path);
+    //Serial.printf("Writing file: %s\n", path);
 
     File file = fs.open(path, FILE_WRITE);
     if(!file){
-        Serial.println("Failed to open file for writing");
+        //Serial.println("Failed to open file for writing");
         return;
     }
     if(file.print(message)){
-        Serial.println("File written");
+        //Serial.println("File written");
     } else {
-        Serial.println("Write failed");
+        //Serial.println("Write failed");
     }
     file.close();
 }
@@ -485,13 +490,13 @@ void appendFile(fs::FS &fs, const char * path, const char * message){
 
     File file = fs.open(path, FILE_APPEND);
     if(!file){
-        Serial.println("Failed to open file for appending");
+        //Serial.println("Failed to open file for appending");
         return;
     }
     if(file.print(message)){
       //  Serial.println("Message appended");
     } else {
-        Serial.println("Append failed");
+        //Serial.println("Append failed");
     }
     file.close();
 }
@@ -535,7 +540,7 @@ void savePosArray(fs::FS &fs, const char * path) {
 void loadPosArray(fs::FS &fs, const char * path) {
     File file = fs.open(path);
     if (!file) {
-        Serial.println("Failed to open file for reading");
+        //Serial.println("Failed to open file for reading");
         return;
     }
 
@@ -547,6 +552,7 @@ void loadPosArray(fs::FS &fs, const char * path) {
 
     stringToPosArray(data, pos);
 }
+
 
 
 
