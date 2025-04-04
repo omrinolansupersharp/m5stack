@@ -51,6 +51,8 @@ actuator height change per one step = 0.004 *0.005 = 0.00002mm = 20nm
 #include "ClosedCube_TCA9548A.h"
 #include "M5Module4EncoderMotor.h"
 #include "Unit_RTC.h"
+#include "SD.h"
+#include <SPI.h>
 #include <Preferences.h>
 Preferences preferences;
 
@@ -135,8 +137,38 @@ void setup() {
     M5.Lcd.setCursor(20, 110); 
     M5.Lcd.print("Encoder Positions are: ");
 
-    savepos(initialPos);
-    readpos(pos);
+    //Save and read from non-volatile memory
+    //savepos(initialPos);
+    //readpos(pos);
+    
+
+    // Initialize SD card
+    Serial.println("Initializing SD card...");
+    if (!SD.begin(4, SPI, 10000000)) {
+        M5.Lcd.println("Card failed, or not present");
+        Serial.println("Card Mount Failed");
+        // Endlessly loop if the card cannot be initialized.
+        while (1);
+    }
+    Serial.println("TF card initialized.");
+    // Check SD card size
+    uint64_t cardSize = SD.cardSize() / (1024 * 1024);
+    Serial.printf("SD Card Size: %lluMB\n", cardSize);
+    // Write to file
+    Serial.println("Writing to file...");
+    writeFile(SD, "/hello.txt", "Hello ");
+    Serial.println("Reading from file...");
+    readFile(SD, "/hello.txt");
+    Serial.println("Appending to file...");
+    appendFile(SD, "/hello.txt", "World!\n");
+    Serial.println("Reading from file again...");
+    readFile(SD, "/hello.txt");
+
+
+    // Save the pos array to the SD card
+    //savePosArray(SD, "/pos.txt");
+    // Load the pos array from the SD card
+    loadPosArray(SD, "/pos.txt");
 
     Wire.begin(21, 22);
     tca9548a.address(PaHub_I2C_ADDRESS);  // Set the I2C address
@@ -204,6 +236,7 @@ void loop() {
             pos[i][j] = newValues[i][j];
         }
       }
+      savePosArray(SD, "/pos.txt");
     } 
 
     // Set encoder positions e.g. "S 1,2,3 4,5,6 7,8,9 10,11,12 13,14,15"
@@ -214,11 +247,12 @@ void loop() {
             pos[i][j] = newValues[i][j];
         }
       }
+      savePosArray(SD, "/pos.txt");
     } 
 
     // Checking if Idle
     if (cmd[0] == 'I'){
-      int  petal_cmd = cmd[1]-'0';
+      int  petal_cmd = petal;//(cmd[1]-'0');
       if (petal_cmd >= 0 && petal_cmd < 5) {
             bool isIdle = petalMap[petal_cmd].motor->readIdle();
             Serial.print("Motor idle status: ");
@@ -246,8 +280,8 @@ void loop() {
       //bool 
       //set_all_motors(,petal);
     }
-    if (cmd[0] == 'V'){ // Save positions to NonVolatileMemory
-      savepos(pos);
+    if (cmd[0] == 'V'){ // Save positions to sd card
+      savePosArray(SD, "/pos.txt");
     }
     
     
@@ -278,8 +312,12 @@ void move_all_motors(String command, int petal) {
         // Send the command to the selected petal motor
         petalMap[petal].motor->sendGcode(buffer);
         Serial.println("G-code command sent"); // Debugging statement
-        // Wait for motor to become idle before finishing move
+        
+        
         while (!petalMap[petal].motor->readIdle()) {
+          /*
+        // Wait for motor to become idle before finishing move
+        // we don't wanna do this because we want to return to the loop
           unsigned long currentMillis = millis();        
           if (currentMillis - previousMillis >= interval) {
             previousMillis = currentMillis;
@@ -290,18 +328,17 @@ void move_all_motors(String command, int petal) {
             Serial.println("Timeout reached, exiting loop.");
             break;
           }
+          */
+          delay(10);
         }
-        Serial.println("Motor is idle again after move"); // Debugging statement
     } else {
         Serial.println("Motor is not connected"); // Debugging statement
-    }
-    
+    } 
     //update pos variable
     pos[petal][0] += (x * conv);
     pos[petal][1] += (y * conv);
     pos[petal][2] += (z * conv);
-    Serial.println(pos[petal][0]);
-    
+    savePosArray(SD, "/pos.txt");
 }
 
 /*
@@ -405,6 +442,112 @@ void update(){
   M5.Lcd.print(pos[petal][2]);
 
 }
+
+// read file from sd card
+void readFile(fs::FS &fs, const char * path){ 
+    Serial.printf("Reading file: %s\n", path);
+
+    File file = fs.open(path);
+    if(!file){
+        Serial.println("Failed to open file for reading");
+        return;
+    }
+
+    Serial.print("Read from file: ");
+    while(file.available()){
+        Serial.write(file.read());
+    }
+    file.close();
+}
+
+// write file to sd card
+void writeFile(fs::FS &fs, const char * path, const char * message){
+    Serial.printf("Writing file: %s\n", path);
+
+    File file = fs.open(path, FILE_WRITE);
+    if(!file){
+        Serial.println("Failed to open file for writing");
+        return;
+    }
+    if(file.print(message)){
+        Serial.println("File written");
+    } else {
+        Serial.println("Write failed");
+    }
+    file.close();
+}
+
+//change a file on the sd card
+void appendFile(fs::FS &fs, const char * path, const char * message){
+    //Serial.printf("Appending to file: %s\n", path);
+
+    File file = fs.open(path, FILE_APPEND);
+    if(!file){
+        Serial.println("Failed to open file for appending");
+        return;
+    }
+    if(file.print(message)){
+      //  Serial.println("Message appended");
+    } else {
+        Serial.println("Append failed");
+    }
+    file.close();
+}
+
+// Function to convert the pos array to a string
+String posArrayToString(float array[5][3]) {
+    String result = "";
+    for (int i = 0; i < 5; i++) {
+        for (int j = 0; j < 3; j++) {
+            result += String(array[i][j], 6);
+            if (j < 2) result += ",";
+        }
+        result += "\n";
+    }
+    return result;
+}
+
+// Function to convert a string to the pos array
+void stringToPosArray(String data, float array[5][3]) {
+    int row = 0;
+    int col = 0;
+    char *token = strtok((char*)data.c_str(), ",\n");
+    while (token != NULL) {
+        array[row][col] = atof(token);
+        col++;
+        if (col == 3) {
+            col = 0;
+            row++;
+        }
+        token = strtok(NULL, ",\n");
+    }
+}
+
+// Save the pos array to the SD card
+void savePosArray(fs::FS &fs, const char * path) {
+    String data = posArrayToString(pos);
+    writeFile(fs, path, data.c_str());
+}
+
+// Read the pos array from the SD card
+void loadPosArray(fs::FS &fs, const char * path) {
+    File file = fs.open(path);
+    if (!file) {
+        Serial.println("Failed to open file for reading");
+        return;
+    }
+
+    String data = "";
+    while (file.available()) {
+        data += (char)file.read();
+    }
+    file.close();
+
+    stringToPosArray(data, pos);
+}
+
+
+
 
 
 
