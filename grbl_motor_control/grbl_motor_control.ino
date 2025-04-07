@@ -102,8 +102,8 @@ Unit_RTC RTC;
 rtc_time_type RTCtime;
 rtc_date_type RTCdate;
 unsigned long previousMillis = 0;
-const long interval = 100; // Interval to check motor status (in milliseconds)
-unsigned long timeout = 500; // Timeout period (in milliseconds)
+const long interval = 50; // Interval to check motor status (in milliseconds)
+unsigned long timeout = 5000; // Timeout period (in milliseconds)
 unsigned long startTime = millis();
 
 
@@ -118,18 +118,17 @@ float initialPos[5][3] = {
     {0.000000, 0.000000, 0.000000}
 };
 float conv = 0.004; // conversion between GCode X1 and distance moved by screw
-int wait = 100; //scren refresh time in ms
+int wait = 50; //scren refresh time in ms
+float steps_per_rev = 200; // motor steps per one motor revolution
+float enc_counts_per_rev = 8300.0; // encoder counts per one motor revolution
 
 void setup() {
     M5.begin();
     M5.Power.begin();
 
     M5.Lcd.setTextSize(2);
-    //M5.Lcd.setFont(&FreeSansBold12pt7b);
-    //M5.Lcd.setCursor(50, 100); // Set cursor position to (50, 100)
-    //M5.Lcd.print("Hello, M5Stack!");
     M5.Lcd.setCursor(20, 20); 
-    M5.Lcd.print("Actuator Control");
+    M5.Lcd.print("Hibiscus Actuator Control");
     M5.Lcd.setCursor(20, 50); 
     M5.Lcd.print("Active Petal is:");
     M5.Lcd.setCursor(20, 80);  
@@ -205,7 +204,7 @@ void loop() {
         Serial.println("");
         cmd = Serial.readStringUntil('\n');
         //Serial.println(cmd); 
-        delay(10);      
+        delay(50);      
     
     // changing petal number
     if (cmd[0] == 'P'){
@@ -246,42 +245,21 @@ void loop() {
 
     // Checking if Idle
     if (cmd[0] == 'I') {
-    int petal_cmd = petal; // (cmd[1] - '0');
-
-    if (petal_cmd >= 0 && petal_cmd < 5) {
-        // Check if the motor is connected
-        if (petalMap[petal_cmd].motor != nullptr) {
-            auto idleStatus = petalMap[petal_cmd].motor->readIdle();
-            // Check if idleStatus is a boolean
-            if (idleStatus == 0 || idleStatus == 1) {
-                bool isIdle = (idleStatus == 0); // Convert to boolean
-                //String idleStatusString = isIdle ? "true" : "false"; // Convert to string
-                //Serial.println("Motor idle status: " + idleStatusString); // Debugging statement
-                //delay(10);
-            } else {
-                //Serial.println("Invalid return type from readIdle()"); // Error handling
-            }
-        } else {
-            //Serial.println("Motor not connected"); // Motor connection check
-        }
-    } else {
-        //Serial.println("Invalid petal command"); // Debugging statement
-    }
+      IdleChecker(petal);
     }
 
     // reading encoders - need to save until we actually have encoders
     if (cmd[0] == 'E'){
       int  petal_cmd = cmd[1]-'0';
       int  motor_cmd = cmd[2]-'0';
-      int32_t enc  = GetEncoderValue(petal_cmd, motor_cmd);
+      int32_t enc  = Encoder(petal_cmd, motor_cmd);
       Serial.println(enc);
     }
     if (cmd[0] == 'G'){ // move motor command
       //bool 
       move_all_motors(cmd,petal);
-      Serial.println("Motion finished");
+      //Serial.println("Motion finished");
     }
-
     if (cmd[0] == 'M'){ // move motor command
       //bool 
       //set_all_motors(,petal);
@@ -289,31 +267,54 @@ void loop() {
     if (cmd[0] == 'V'){ // Save positions to sd card
       savePosArray(SD, "/pos.txt");
     }
-    
    
 }   
 }
 // END OF LOOP
 
-// FUUNCTIONS
+// FUNCTIONS
 
-void move_all_motors(String command, int petal) {
+void move_all_motors(String command, int petal){
     // Convert the command into a char array
     char buffer[command.length() + 1];
     command.toCharArray(buffer, sizeof(buffer));
-    Serial.print("Command buffer: ");
-    Serial.println(buffer); // Debugging statement
+    //Serial.print("Command buffer: ");
+    //Serial.println(buffer); // Debugging statement
     // extract the position variable from the G command
-    float x = extractValue(command, 'X');
-    float y = extractValue(command, 'Y');
-    float z = extractValue(command, 'Z');
+    float target_x = extractValue(command, 'X');
+    float target_y = extractValue(command, 'Y');
+    float target_z = extractValue(command, 'Z');
     int f = extractValue(command, 'F');
     // Select the correct PAHub address for the selected petal
     tca9548a.selectChannel(petalMap[petal].pahub_address);
-    Serial.print("Selected PAHub channel: ");
-    Serial.println(petalMap[petal].pahub_address); // Debugging statement
-    petalMap[petal].motor->sendGcode(buffer);
-    Serial.println("G-code command sent");
+    //Serial.print("Selected PAHub channel: ");
+    //Serial.println(petalMap[petal].pahub_address); // Debugging statement
+    petalMap[petal].motor->sendGcode(buffer); //- original move function
+
+    //new move function with encoder catching
+    /*
+    while (true) {
+        float currentPosition_x = Encoder(petal,0); // Read encoder value for motor 0 
+        float currentPosition_y = Encoder(petal,1); // need to add a conversion 
+        float currentPosition_z = Encoder(petal,2);
+        
+        if ((currentPosition_x < target_x) || (currentPosition_y < target_y) || (currentPosition_z < target_z)) {
+            petalMap[petal].motor->setMotor(target_x - currentPosition_x, target_y - currentPosition_y, target_z - currentPosition_z, f); // Move motor relative to current position
+        } 
+        else if ((currentPosition_x > target_x) || (currentPosition_y > target_y) || (currentPosition_z > target_z)) {
+            petalMap[petal].motor->setMotor(currentPosition_x - target_x, currentPosition_y - target_y, currentPosition_z - target_z, f); // Move motor relative to current position
+        } 
+        else {
+            petalMap[petal].motor->setMotor(0, 0, 0, 0); // Stop motor
+            break; // Exit loop
+        }
+        delay(100); // Small delay to prevent overwhelming the I2C bus
+    }
+    */
+
+    //petalMap[petal].motor->setMotor(x,y,z,f); //use set motor instead of g code
+    //Serial.println("G-code command sent");
+
     /*
     // Check if the motor is connected by calling the isMotorConnected function
     if (isMotorConnected(petalMap[petal].motor)) {
@@ -341,13 +342,13 @@ void move_all_motors(String command, int petal) {
         Serial.println("Motor is not connected"); // Debugging statement
     } 
     */
+    delay(100);
     //update pos variable
-    pos[petal][0] += (x * conv);
-    pos[petal][1] += (y * conv);
-    pos[petal][2] += (z * conv);
+    pos[petal][0] += (target_x * conv);
+    pos[petal][1] += (target_y * conv);
+    pos[petal][2] += (target_z * conv);
     savePosArray(SD, "/pos.txt");
 }
-
 
 /*
 void set_all_motors(int x = 0, int y = 0, int z = 0, int speed = 300, int petal = 0) {
@@ -364,24 +365,36 @@ void set_all_motors(int x = 0, int y = 0, int z = 0, int speed = 300, int petal 
 }
 */
 
-int32_t GetEncoderValue(int petal, int motor){ // get encoder value
+float Encoder(int petal, int motor){ // get encoder value
   if (petal == 0){
+  tca9548a.selectChannel(petalMap[petal].pahub_address);
   encoder_readings[0][motor] = driverA.getEncoderValue(motor);
   }
   if (petal == 1){
+  tca9548a.selectChannel(petalMap[petal].pahub_address);
   encoder_readings[1][motor] = driverB.getEncoderValue(motor);
   }
   if (petal == 2){
+  tca9548a.selectChannel(petalMap[petal].pahub_address);
   encoder_readings[2][motor] = driverC.getEncoderValue(motor);
   }
   if (petal == 3){
+  tca9548a.selectChannel(petalMap[petal].pahub_address);
   encoder_readings[3][motor] = driverD.getEncoderValue(motor);
   }
     if (petal == 4){
+  tca9548a.selectChannel(petalMap[petal].pahub_address);
   encoder_readings[4][motor] = driverE.getEncoderValue(motor);
   }
+  // here apply conversion to make a float out of an int32_t
+  for (int i = 0; i < 5; i++) {
+        for (int j = 0; j < 3; j++) {
+            encoder_readings[i][j] = (encoder_readings[i][j] * steps_per_rev) / enc_counts_per_rev;
+        }
+    }
     return encoder_readings[petal][motor];
 }
+
 
 bool isMotorConnected(Module_GRBL* motor) { // this is currently not working - need to figure out what is returned by the status query
     const int maxAttempts = 3;
@@ -403,6 +416,31 @@ bool isMotorConnected(Module_GRBL* motor) { // this is currently not working - n
     }
     return false; // After maxAttempts, conclude the motor is not connected
 }
+
+void IdleChecker(int petal){
+    int petal_cmd = petal; // (cmd[1] - '0');
+    tca9548a.selectChannel(petalMap[petal].pahub_address);
+    if (petal_cmd >= 0 && petal_cmd < 5) {
+        // Check if the motor is connected
+        if (petalMap[petal_cmd].motor != nullptr) {
+            auto idleStatus = petalMap[petal_cmd].motor->readIdle();
+            // Check if idleStatus is a boolean
+            if (idleStatus == 0 || idleStatus == 1) {
+                bool isIdle = (idleStatus == 0); // Convert to boolean
+                Serial.println(isIdle);
+                //String idleStatusString = isIdle ? "true" : "false"; // Convert to string
+                //Serial.println("Motor idle status: " + idleStatusString); // Debugging statement
+                //delay(10);
+            } else {
+                //Serial.println("Invalid return type from readIdle()"); // Error handling
+            }
+        } else {
+            //Serial.println("Motor not connected"); // Motor connection check
+        }
+    } else {
+        //Serial.println("Invalid petal command"); // Debugging statement
+    }
+    }
 
 float extractValue(String command, char axis) {
   int startIndex = command.indexOf(axis);
@@ -447,7 +485,7 @@ void update(int petal,float pos[5][3]){
   M5.Lcd.print(pos[petal][1],5);
   M5.Lcd.setCursor(220, 140);
   M5.Lcd.print(pos[petal][2],5);
-  delay(10);
+  delay(20);
 }
 
 // read file from sd card
@@ -552,6 +590,8 @@ void loadPosArray(fs::FS &fs, const char * path) {
 
     stringToPosArray(data, pos);
 }
+
+
 
 
 
