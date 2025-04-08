@@ -125,7 +125,7 @@ float enc_counts_per_rev = 8300.0; // encoder counts per one motor revolution
 void setup() {
     M5.begin();
     M5.Power.begin();
-
+    M5.Speaker.mute();  
     M5.Lcd.setTextSize(2);
     M5.Lcd.setCursor(20, 20); 
     M5.Lcd.print("Hibiscus Actuator Control");
@@ -201,14 +201,31 @@ void loop() {
     String cmd = ""; // Declare cmd at the beginning of the loop
     if (Serial.available()) {
         // Read the serial input
-        Serial.println("");
         cmd = Serial.readStringUntil('\n');
         //Serial.println(cmd); 
-        delay(50);      
-    
+        //delay(50);      
+    /*
+    switch(cmd[0]) { // different loop structure
+      case 'P': // Change petal
+      petal = cmd[1]-'0';
+      break;
+
+      case 'Q': // Query position
+        {
+          String positionString = "";
+          for (int j = 0; j < 3; ++j) {
+            positionString += String(pos[petal][j], 6);
+            if (j < 2) positionString += ",";
+          }
+          Serial.println(positionString);
+        }
+        break;
+    */
     // changing petal number
     if (cmd[0] == 'P'){
       petal = cmd[1]-'0';
+      tca9548a.selectChannel(petalMap[petal].pahub_address);
+      savePosArray(SD, "/pos.txt");
       //Serial.print("Active Petal changed to: ");
       //Serial.println(petal);
     }
@@ -216,10 +233,12 @@ void loop() {
     // Query position - returns the three encoder values of the active petal
     if (cmd[0] == 'Q'){
       //Serial.println("The current position is: ");
+      String positionString = "";
       for (int j = 0; j < 3; ++j) {
-            Serial.print(pos[petal][j], 6);
-            if (j < 2) Serial.print(",");
-    }
+          positionString += String(pos[petal][j], 6);
+          if (j < 2) positionString += ",";
+      }
+      Serial.println(positionString);
     }
 
     // Reset encoder positions to 0
@@ -331,7 +350,7 @@ void move_all_motors(String command, int petal){
             Serial.println("Motor is not idle, waiting..."); // Debugging statement
           }  
           // Check if timeout period has elapsed
-          if (currentMillis - startTime >= (timeout*30*(x+y+z)/f)){
+          if (currentMillis - startTime >= (timeout*30*(x+y+z)/f)){ // add time multiplier for length of move
             Serial.println("Timeout reached, exiting loop.");
             break;
           }
@@ -342,12 +361,12 @@ void move_all_motors(String command, int petal){
         Serial.println("Motor is not connected"); // Debugging statement
     } 
     */
-    delay(100);
+    delay(20);
     //update pos variable
     pos[petal][0] += (target_x * conv);
     pos[petal][1] += (target_y * conv);
     pos[petal][2] += (target_z * conv);
-    savePosArray(SD, "/pos.txt");
+    //savePosArray(SD, "/pos.txt");
 }
 
 /*
@@ -402,7 +421,7 @@ bool isMotorConnected(Module_GRBL* motor) { // this is currently not working - n
         // Send a simple command to check connection
         char checkCommand[] = "?";
         motor->sendGcode(checkCommand);
-        delay(100); // Wait for response
+        delay(50); // Wait for response
 
         // Read the response from the motor
         String response = motor->readLine();
@@ -480,12 +499,12 @@ void update(int petal,float pos[5][3]){
   M5.Lcd.setCursor(20, 80);  
   M5.Lcd.print(petal);
   M5.Lcd.setCursor(20, 140);  
-  M5.Lcd.print(pos[petal][0],5);
+  M5.Lcd.print(pos[petal][0],6);
   M5.Lcd.setCursor(120, 140);
-  M5.Lcd.print(pos[petal][1],5);
+  M5.Lcd.print(pos[petal][1],6);
   M5.Lcd.setCursor(220, 140);
-  M5.Lcd.print(pos[petal][2],5);
-  delay(20);
+  M5.Lcd.print(pos[petal][2],6);
+  delay(10);
 }
 
 // read file from sd card
@@ -590,6 +609,7 @@ void loadPosArray(fs::FS &fs, const char * path) {
 
     stringToPosArray(data, pos);
 }
+
 
 
 
