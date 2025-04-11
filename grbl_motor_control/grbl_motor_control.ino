@@ -1,4 +1,3 @@
-
 /*
 Documentation for GRBL stack is at https://docs.m5stack.com/en/module/grbl13.2
 mOTOR XYZ = ABC
@@ -638,6 +637,7 @@ void loadPosArray(fs::FS &fs, const char * path) {
 
     stringToPosArray(data, pos);
 }
+
 
 
 
