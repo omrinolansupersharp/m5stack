@@ -1,3 +1,4 @@
+
 /*
 Documentation for GRBL stack is at https://docs.m5stack.com/en/module/grbl13.2
 mOTOR XYZ = ABC
@@ -185,9 +186,10 @@ void setup() {
         Serial.println("Encoder B Init faild!");
         delay(1000);
     }
-    
+    /*
     tca9548a.selectChannel(1);
     delay(100);
+    Wire.begin(21, 22);
     _GRBL_2.Init(&Wire); // No return value to check
     _GRBL_2.setMode("distance");
     while (!driverC.begin(&Wire1, mod_address_C,21,22)) {
@@ -204,12 +206,14 @@ void setup() {
     }
     tca9548a.selectChannel(2);
     delay(100);
+    Wire.begin(21, 22);
     _GRBL_4.Init(&Wire); // No return value to check
     _GRBL_4.setMode("distance");
     while (!driverE.begin(&Wire1, mod_address_E,21,22)) {
         Serial.println("Encoder E Init faild!");
         delay(1000);
     }
+    */
     Serial.begin(115200);
     Serial.println("Setup complete");
 }
@@ -298,16 +302,14 @@ void loop() {
       //Serial.println("Motion finished");
     }
     if (cmd[0] == 'G'){ // move motor command - used for encoder counting
-      Serial.println(cmd);
-      int32_t enc_s  = Encoder(0, 0);
-      Serial.print("Start Encoder: ");
-      Serial.println(enc_s);
+      //int32_t enc_s  = Encoder(0, 0);
+      //Serial.print("Start Encoder: ");
+      //Serial.println(enc_s);
       move_all_motors(cmd,petal);
-      delay(1000);
-      int32_t enc_e  = Encoder(0,0);
-      Serial.print("End Encoder: ");
-      Serial.println(enc_e);
-      //set_all_motors(,petal);
+      //delay(400);
+      //int32_t enc_e  = Encoder(0,0);
+      //Serial.print("End Encoder: ");
+      //Serial.println(enc_e);
     }
     if (cmd[0] == 'V'){ // Save positions to sd card
       savePosArray(SD, "/pos.txt");
@@ -437,7 +439,8 @@ int32_t Encoder(int petal, int motor){ // get encoder value
   //          encoder_readings[i][j] = (encoder_readings[i][j] * steps_per_rev) / enc_counts_per_rev;
   //      }
   //  }
-    return encoder_readings[petal][motor];
+  Serial.println(encoder_readings[petal][motor]);
+  return encoder_readings[petal][motor];
 }
 
 
@@ -635,8 +638,6 @@ void loadPosArray(fs::FS &fs, const char * path) {
 
     stringToPosArray(data, pos);
 }
-
-
 
 
 
