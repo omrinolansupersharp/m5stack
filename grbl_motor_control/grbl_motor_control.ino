@@ -63,8 +63,8 @@ ClosedCube::Wired::TCA9548A tca9548a;
 // if there is any hardware change then we need to adapt this too
 Module_GRBL _GRBL_0 = Module_GRBL(0x70); // defined by switch 4 in the back of the board
 Module_GRBL _GRBL_1 = Module_GRBL(0x71);
-Module_GRBL _GRBL_2 = Module_GRBL(0x71);
-Module_GRBL _GRBL_3 = Module_GRBL(0x70);
+Module_GRBL _GRBL_2 = Module_GRBL(0x70);
+Module_GRBL _GRBL_3 = Module_GRBL(0x71);
 Module_GRBL _GRBL_4 = Module_GRBL(0x71);
 int pa_hub_address_0 = 0;
 int pa_hub_address_1 = 0;
@@ -276,6 +276,7 @@ void loop() {
     }
     if (cmd[0] == 'G'){ // move motor command
       //bool 
+      int32_t enc  = Encoder(petal_cmd, motor_cmd);
       move_all_motors(cmd,petal);
       //Serial.println("Motion finished");
     }
@@ -609,6 +610,9 @@ void loadPosArray(fs::FS &fs, const char * path) {
 
     stringToPosArray(data, pos);
 }
+
+
+
 
 
 
