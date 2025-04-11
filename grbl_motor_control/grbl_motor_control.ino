@@ -134,13 +134,11 @@ void setup() {
     M5.Lcd.setCursor(20, 80);  
     M5.Lcd.print(petal);
     M5.Lcd.setCursor(20, 110); 
-    M5.Lcd.print("Encoder Positions are: ");
+    M5.Lcd.print("Stop Counts are: ");
 
     //Save and read from non-volatile memory
     //savepos(initialPos);
     //readpos(pos);
-    
-
     // Initialize SD card
     Serial.println("Initializing SD card...");
     if (!SD.begin(4, SPI, 10000000)) {
@@ -163,7 +161,6 @@ void setup() {
     Serial.println("Reading from file again...");
     readFile(SD, "/hello.txt");
 
-
     // Save the pos array to the SD card
     //savePosArray(SD, "/pos.txt");
     // Load the pos array from the SD card
@@ -175,22 +172,27 @@ void setup() {
     tca9548a.selectChannel(0);
     _GRBL_0.Init(&Wire); // No return value to check
     _GRBL_0.setMode("distance");
+    driverA.begin(Wire, mod_address_A,21,22);
 
     tca9548a.selectChannel(0);
     _GRBL_1.Init(&Wire); // No return value to check
     _GRBL_1.setMode("distance");
+    driverB.begin(Wire, mod_address_B,21,22);
 
     tca9548a.selectChannel(1);
     _GRBL_2.Init(&Wire); // No return value to check
     _GRBL_2.setMode("distance");
+    driverC.begin(Wire, mod_address_C,21,22);
 
     tca9548a.selectChannel(1);
     _GRBL_3.Init(&Wire); // No return value to check
     _GRBL_3.setMode("distance");
+    driverD.begin(Wire, mod_address_D,21,22);
 
     tca9548a.selectChannel(2);
     _GRBL_4.Init(&Wire); // No return value to check
     _GRBL_4.setMode("distance");
+    driverE.begin(Wire, mod_address_E,21,22);
 
     Serial.begin(115200);
     Serial.println("Setup complete");
@@ -274,14 +276,21 @@ void loop() {
       int32_t enc  = Encoder(petal_cmd, motor_cmd);
       Serial.println(enc);
     }
-    if (cmd[0] == 'G'){ // move motor command
-      //bool 
-      int32_t enc  = Encoder(petal_cmd, motor_cmd);
+    if (cmd[0] == 'M'){ // move motor command
+      
       move_all_motors(cmd,petal);
       //Serial.println("Motion finished");
     }
-    if (cmd[0] == 'M'){ // move motor command
-      //bool 
+    if (cmd[0] == 'G'){ // move motor command - used for encoder counting
+      Serial.println(cmd);
+      int32_t enc_s  = Encoder(0, 0);
+      Serial.print("Start Encoder: ");
+      Serial.println(enc_s);
+      move_all_motors(cmd,petal);
+      delay(1000);
+      int32_t enc_e  = Encoder(0,0);
+      Serial.print("End Encoder: ");
+      Serial.println(enc_e);
       //set_all_motors(,petal);
     }
     if (cmd[0] == 'V'){ // Save positions to sd card
@@ -385,7 +394,7 @@ void set_all_motors(int x = 0, int y = 0, int z = 0, int speed = 300, int petal 
 }
 */
 
-float Encoder(int petal, int motor){ // get encoder value
+int32_t Encoder(int petal, int motor){ // get encoder value
   if (petal == 0){
   tca9548a.selectChannel(petalMap[petal].pahub_address);
   encoder_readings[0][motor] = driverA.getEncoderValue(motor);
@@ -407,11 +416,11 @@ float Encoder(int petal, int motor){ // get encoder value
   encoder_readings[4][motor] = driverE.getEncoderValue(motor);
   }
   // here apply conversion to make a float out of an int32_t
-  for (int i = 0; i < 5; i++) {
-        for (int j = 0; j < 3; j++) {
-            encoder_readings[i][j] = (encoder_readings[i][j] * steps_per_rev) / enc_counts_per_rev;
-        }
-    }
+  //for (int i = 0; i < 5; i++) {
+  //      for (int j = 0; j < 3; j++) {
+  //          encoder_readings[i][j] = (encoder_readings[i][j] * steps_per_rev) / enc_counts_per_rev;
+  //      }
+  //  }
     return encoder_readings[petal][motor];
 }
 
@@ -610,6 +619,8 @@ void loadPosArray(fs::FS &fs, const char * path) {
 
     stringToPosArray(data, pos);
 }
+
+
 
 
 
