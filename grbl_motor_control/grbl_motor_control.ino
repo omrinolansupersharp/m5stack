@@ -170,7 +170,7 @@ void setup() {
     tca9548a.address(PaHub_I2C_ADDRESS);  // Set the I2C address
 
     tca9548a.selectChannel(0);
-    delay(100);
+    delay(1000);
     _GRBL_0.Init(&Wire); // No return value to check
     _GRBL_0.setMode("distance");
     while (!driverA.begin(&Wire1, mod_address_A,21,22)) {
@@ -178,16 +178,16 @@ void setup() {
         delay(1000);
     }
     tca9548a.selectChannel(0);
-    delay(100);
+    delay(1000);
     _GRBL_1.Init(&Wire); // No return value to check
     _GRBL_1.setMode("distance");
     while (!driverB.begin(&Wire1, mod_address_B,21,22)) {
         Serial.println("Encoder B Init faild!");
         delay(1000);
     }
-    /*
+    
     tca9548a.selectChannel(1);
-    delay(100);
+    delay(1000);
     Wire.begin(21, 22);
     _GRBL_2.Init(&Wire); // No return value to check
     _GRBL_2.setMode("distance");
@@ -196,7 +196,7 @@ void setup() {
         delay(1000);
     }
     tca9548a.selectChannel(1);
-    delay(100);
+    delay(1000);
     _GRBL_3.Init(&Wire); // No return value to check
     _GRBL_3.setMode("distance");
     while (!driverD.begin(&Wire1, mod_address_D,21,22)) {
@@ -204,7 +204,7 @@ void setup() {
         delay(1000);
     }
     tca9548a.selectChannel(2);
-    delay(100);
+    delay(1000);
     Wire.begin(21, 22);
     _GRBL_4.Init(&Wire); // No return value to check
     _GRBL_4.setMode("distance");
@@ -212,7 +212,7 @@ void setup() {
         Serial.println("Encoder E Init faild!");
         delay(1000);
     }
-    */
+    
     Serial.begin(115200);
     Serial.println("Setup complete");
 }
@@ -301,14 +301,15 @@ void loop() {
       //Serial.println("Motion finished");
     }
     if (cmd[0] == 'G'){ // move motor command - used for encoder counting
-      //int32_t enc_s  = Encoder(0, 0);
-      //Serial.print("Start Encoder: ");
-      //Serial.println(enc_s);
+      int32_t enc_s  = Encoder(0, 0);
+      Serial.print("Start Encoder: ");
+      Serial.println(enc_s);
+      //delay(100);
       move_all_motors(cmd,petal);
-      //delay(400);
-      //int32_t enc_e  = Encoder(0,0);
-      //Serial.print("End Encoder: ");
-      //Serial.println(enc_e);
+      delay(100);
+      int32_t enc_e  = Encoder(0,0);
+      Serial.print("End Encoder: ");
+      Serial.println(enc_e);
     }
     if (cmd[0] == 'V'){ // Save positions to sd card
       savePosArray(SD, "/pos.txt");
@@ -412,33 +413,16 @@ void set_all_motors(int x = 0, int y = 0, int z = 0, int speed = 300, int petal 
 */
 
 int32_t Encoder(int petal, int motor){ // get encoder value
-  if (petal == 0){
+
   tca9548a.selectChannel(petalMap[petal].pahub_address);
-  encoder_readings[0][motor] = driverA.getEncoderValue(motor);
-  }
-  if (petal == 1){
-  tca9548a.selectChannel(petalMap[petal].pahub_address);
-  encoder_readings[1][motor] = driverB.getEncoderValue(motor);
-  }
-  if (petal == 2){
-  tca9548a.selectChannel(petalMap[petal].pahub_address);
-  encoder_readings[2][motor] = driverC.getEncoderValue(motor);
-  }
-  if (petal == 3){
-  tca9548a.selectChannel(petalMap[petal].pahub_address);
-  encoder_readings[3][motor] = driverD.getEncoderValue(motor);
-  }
-    if (petal == 4){
-  tca9548a.selectChannel(petalMap[petal].pahub_address);
-  encoder_readings[4][motor] = driverE.getEncoderValue(motor);
-  }
+  encoder_readings[petal][motor] = driverA.getEncoderValue(motor);
   // here apply conversion to make a float out of an int32_t
   //for (int i = 0; i < 5; i++) {
   //      for (int j = 0; j < 3; j++) {
   //          encoder_readings[i][j] = (encoder_readings[i][j] * steps_per_rev) / enc_counts_per_rev;
   //      }
   //  }
-  Serial.println(encoder_readings[petal][motor]);
+  //Serial.println(encoder_readings[petal][motor]);
   return encoder_readings[petal][motor];
 }
 
@@ -637,6 +621,8 @@ void loadPosArray(fs::FS &fs, const char * path) {
 
     stringToPosArray(data, pos);
 }
+
+
 
 
 
