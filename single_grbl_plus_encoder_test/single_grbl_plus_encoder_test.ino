@@ -105,7 +105,7 @@ void setup() {
     Serial.println("Encoder initialised");
 
     
-    _GRBL_A.Init(&Wire); // No return value to check
+    _GRBL_A.Init(&Wire,200,200,200,36000); // No return value to check
     _GRBL_A.setMode("distance");
     Serial.println("GRBL motor initialised");
 
@@ -158,7 +158,7 @@ void loop() {
       Serial.println(enc_s);
       //delay(100);
       move_all_motors(cmd);
-      delay(1000);
+      delay(5000);
       int32_t enc_e  = Encoder(0,0);
       Serial.print("End Encoder: ");
       Serial.println(enc_e);
@@ -173,18 +173,84 @@ void loop() {
 
 void move_all_motors(String command){
     Serial.println(command);
+    
+    int32_t start[3] = {0,0,0};
+    int32_t live_pos[3] = {0,0,0};
+    int32_t steps[3] = {0,0,0};
+    int32_t target[3] = {0,0,0};
+    bool reached[3] = {false, false, false};
+
+    target[0] = extractValue(command, 'X');
+    target[1] = extractValue(command, 'Y');
+    target[2] = extractValue(command, 'Z');
+    int f = extractValue(command, 'F');
+    // need to add a multiplier to convert between distance, gcode commands and encoder counts
+
+    // iterate over the three axes to check for encoder counts while moving
+    for (uint8_t i = 0; i < 3; i++) { 
+      start[i] = Encoder(petal,i);
+      live_pos[i] = start[i];
+      steps[i] = target[i] - start[i];
+    }
     // Convert the command into a char array
     char buffer[command.length() + 1];
     command.toCharArray(buffer, sizeof(buffer));
-    
     _GRBL_A.sendGcode(buffer); //- original move function
+    Serial.print("command sent: ");
+    Serial.println(buffer);
+    //delay(1000);
+    //feedHold();
+    /*
+    // loop to check encoder values and stop if reached targets
+    while (!reached[0] || !reached[1] || !reached[2]) {
+    for (uint8_t i = 0; i < 3; i++) {
+    live_pos[i] = Encoder(petal, i);
+    if ((abs(live_pos[i]) - abs(start[i])) >= abs(100000/*steps[i])) {
+    reached[i] = true;
+    
+    // Stop the motor for the axis that has reached the target position
+    String stopCommand = "G1";
+    if (i == 0) stopCommand += "X0"; //+ String(live_pos[i]);
+    if (i == 1) stopCommand += "Y0";// + String(live_pos[i]);
+    if (i == 2) stopCommand += "Z0";// + String(live_pos[i]);
+    stopCommand += "F0";
+    char stopBuffer[stopCommand.length() + 1];
+    stopCommand.toCharArray(stopBuffer, sizeof(stopBuffer));
+    _GRBL_A.sendGcode(stopBuffer);
+    
+    Serial.print("motor stopped at: ");
+    Serial.println(live_pos[i]);
+    }
+    }
+    }
+    */
+}
 
+void feedHold() {
+  //_GRBL_A.sendByte(!);
+  Serial.print("!");
+}
+
+float extractValue(String command, char axis) {
+  int startIndex = command.indexOf(axis);
+  if (startIndex == -1) {
+    return 0.0; // Return 0 if the axis is not found
+  }
+  int endIndex = command.indexOf(' ', startIndex);
+  if (endIndex == -1) {
+    endIndex = command.length();
+  }
+  String valueStr = command.substring(startIndex + 1, endIndex);
+  return valueStr.toFloat();
+}
+
+int32_t Encoder(int petal, int motor) { // get encoder value
+ encoder_readings[0][motor] = driverA.getEncoderValue(motor);
+ return encoder_readings[petal][motor];
 }
 
 
-int32_t Encoder(int petal, int motor){ // get encoder value
-  encoder_readings[0][motor] = driverA.getEncoderValue(motor);
-  return encoder_readings[petal][motor];
-}
+
+
 
 
