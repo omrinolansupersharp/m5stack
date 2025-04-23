@@ -53,6 +53,7 @@ actuator height change per one step = 0.004 *0.005 = 0.00002mm = 20nm
 #include "Unit_RTC.h"
 #include <SPI.h>
 #include <Preferences.h>
+#include <math.h>
 Preferences preferences;
 
 // grbl motor address
@@ -84,7 +85,8 @@ float initialPos[5][3] = {
 float conv = 0.004; // conversion between GCode X1 and distance moved by screw
 int wait = 50; //scren refresh time in ms
 float steps_per_rev = 200; // motor steps per one motor revolution
-float enc_counts_per_rev = 8300.0; // encoder counts per one motor revolution
+float enc_ratio = (131072) / (50 * 32 );
+
 
 void setup() {
     M5.begin();
@@ -118,27 +120,6 @@ void loop() {
     if (Serial.available()) {
         // Read the serial input
         cmd = Serial.readStringUntil('\n');
-        //Serial.println(cmd); 
-        //delay(50);      
-    /*
-    switch(cmd[0]) { // different loop structure
-      case 'P': // Change petal
-      petal = cmd[1]-'0';
-      break;
-
-      case 'Q': // Query position
-        {
-          String positionString = "";
-          for (int j = 0; j < 3; ++j) {
-            positionString += String(pos[petal][j], 6);
-            if (j < 2) positionString += ",";
-          }
-          Serial.println(positionString);
-        }
-        break;
-    */
-
-
 
     // reading encoders - need to save until we actually have encoders
     if (cmd[0] == 'E'){
@@ -147,21 +128,24 @@ void loop() {
       int32_t enc  = Encoder(petal_cmd, motor_cmd);
       Serial.println(enc);
     }
-    if (cmd[0] == 'M'){ // move motor command
-      move_all_motors(cmd);
-      //Serial.println("Motion finished");
-    }
 
     if (cmd[0] == 'G'){ // move motor command - used for encoder counting
-      int32_t enc_s  = Encoder(0,0);
-      Serial.print("Start Encoder: ");
-      Serial.println(enc_s);
+      int32_t enc_s[3] = {0,0,0};
+      int32_t enc_e[3] = {0,0,0};
+      for (uint8_t i = 0; i < 3; i++) { 
+      enc_s[i] = Encoder(0,i);
+      }
+      //Serial.print("Start Encoder: ");
+      //Serial.println(enc_s);
       //delay(100);
       move_all_motors(cmd);
-      delay(5000);
-      int32_t enc_e  = Encoder(0,0);
-      Serial.print("End Encoder: ");
-      Serial.println(enc_e);
+      //delay(10000);
+      for (uint8_t i = 0; i < 3; i++) { 
+      enc_e[i] = Encoder(0,i);
+      Serial.print((i) + " End Encoder: ");
+      Serial.println(enc_e[i]-enc_s[i]);
+      
+      }
       Serial.println("---------------");
     }
    
@@ -173,63 +157,78 @@ void loop() {
 
 void move_all_motors(String command){
     Serial.println(command);
-    
+    //variables for a single move    
     int32_t start[3] = {0,0,0};
     int32_t live_pos[3] = {0,0,0};
     int32_t steps[3] = {0,0,0};
     int32_t target[3] = {0,0,0};
+    float damped_move[3] = {0,0,0};
+    int32_t end[3] = {0,0,0};
+    float diff[3] = {0,0,0};
+    float damp = 0.8;
     bool reached[3] = {false, false, false};
 
-    target[0] = extractValue(command, 'X');
-    target[1] = extractValue(command, 'Y');
-    target[2] = extractValue(command, 'Z');
-    int f = extractValue(command, 'F');
-    // need to add a multiplier to convert between distance, gcode commands and encoder counts
+    damped_move[0] = extractValue(command, 'X') * damp;
+    damped_move[1] = extractValue(command, 'Y') * damp;
+    damped_move[2] = extractValue(command, 'Z') * damp;
+    target[0] = extractValue(command, 'X') * enc_ratio;
+    target[1] = extractValue(command, 'Y') * enc_ratio;
+    target[2] = extractValue(command, 'Z') * enc_ratio;
 
-    // iterate over the three axes to check for encoder counts while moving
     for (uint8_t i = 0; i < 3; i++) { 
       start[i] = Encoder(petal,i);
-      live_pos[i] = start[i];
-      steps[i] = target[i] - start[i];
     }
+    //make a new string command that will move 80% of the distance
+    String first_command = "G1 X" + String(damped_move[0]) + " Y" + String(damped_move[1]) + " Z" + String(damped_move[2]) + " F1200";
+    // iterate over the three axes to check for encoder counts while moving
+    
     // Convert the command into a char array
-    char buffer[command.length() + 1];
-    command.toCharArray(buffer, sizeof(buffer));
+    char buffer[first_command.length() + 1];
+    first_command.toCharArray(buffer, sizeof(buffer));
     _GRBL_A.sendGcode(buffer); //- original move function
-    Serial.print("command sent: ");
-    Serial.println(buffer);
-    //delay(1000);
-    //feedHold();
-    /*
+    _GRBL_A.waitIdle();
+    
+    //Now poll encoder values and compare them with the target position
+    for (uint8_t i = 0; i < 3; i++) { 
+      end[i] = Encoder(petal,i);
+      steps[i] = end[i] - start[i];
+      diff[i] = (target[i] - steps[i]) * damp ; 
+      Serial.println(String(i) +" Encoder has moved: "+ steps[i]+ "out of a target: "+ target[i] + ", difference of: "+ diff[i]);
+    }
+    Serial.flush();
+    String corr_command = "G1 X" + String(diff[0]/enc_ratio) + " Y" + String(diff[1]/enc_ratio) + " Z" + String(diff[2]/enc_ratio) + " F1200";
+    Serial.println(corr_command);
+    char corr_buffer[corr_command.length() + 1];
+    corr_command.toCharArray(corr_buffer, sizeof(corr_buffer));
+    delay(50);
+    
+    _GRBL_A.sendGcode(corr_buffer);
+    _GRBL_A.waitIdle();
+    
+    
     // loop to check encoder values and stop if reached targets
-    while (!reached[0] || !reached[1] || !reached[2]) {
+    for (uint8_t e = 0; e < 3; e++) {
+    for (uint8_t i = 0; i < 3; i++) { // loop to make more precise corrections to movement
+      start[i] = Encoder(petal,i);
+      steps[i] = (target[i] - start[i]) * damp / enc_ratio;
+    }
+    String corr_command = "G1 X" + String(steps[0]) + " Y" + String(steps[1]) + " Z" + String(steps[2]) + " F1200";
+    //while (!reached[0] || !reached[1] || !reached[2]) {
+        char buffer[corr_command.length() + 1];
+        corr_command.toCharArray(buffer, sizeof(buffer));
+        _GRBL_A.sendGcode(buffer); //- original move function
+        _GRBL_A.waitIdle();
     for (uint8_t i = 0; i < 3; i++) {
-    live_pos[i] = Encoder(petal, i);
-    if ((abs(live_pos[i]) - abs(start[i])) >= abs(100000/*steps[i])) {
+      live_pos[i] = Encoder(petal, i);
+    if (abs((abs(live_pos[i]) - abs(start[i])) - abs(steps[i])) <= 10) {
     reached[i] = true;
+    }
+    }
+    }
     
-    // Stop the motor for the axis that has reached the target position
-    String stopCommand = "G1";
-    if (i == 0) stopCommand += "X0"; //+ String(live_pos[i]);
-    if (i == 1) stopCommand += "Y0";// + String(live_pos[i]);
-    if (i == 2) stopCommand += "Z0";// + String(live_pos[i]);
-    stopCommand += "F0";
-    char stopBuffer[stopCommand.length() + 1];
-    stopCommand.toCharArray(stopBuffer, sizeof(stopBuffer));
-    _GRBL_A.sendGcode(stopBuffer);
     
-    Serial.print("motor stopped at: ");
-    Serial.println(live_pos[i]);
-    }
-    }
-    }
-    */
 }
 
-void feedHold() {
-  //_GRBL_A.sendByte(!);
-  Serial.print("!");
-}
 
 float extractValue(String command, char axis) {
   int startIndex = command.indexOf(axis);
@@ -241,16 +240,12 @@ float extractValue(String command, char axis) {
     endIndex = command.length();
   }
   String valueStr = command.substring(startIndex + 1, endIndex);
-  return valueStr.toFloat();
+  float motor_distance = valueStr.toFloat();
+  
+  return motor_distance;
 }
 
 int32_t Encoder(int petal, int motor) { // get encoder value
  encoder_readings[0][motor] = driverA.getEncoderValue(motor);
  return encoder_readings[petal][motor];
 }
-
-
-
-
-
-
