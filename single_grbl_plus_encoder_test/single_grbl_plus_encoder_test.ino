@@ -134,6 +134,8 @@ void loop() {
       int32_t enc_e[3] = {0,0,0};
       for (uint8_t i = 0; i < 3; i++) { 
       enc_s[i] = Encoder(0,i);
+      String enc_string = " Start Encoder: " + String(i) + ": " + String(enc_s[i]);
+      Serial.println(enc_string);
       }
       //Serial.print("Start Encoder: ");
       //Serial.println(enc_s);
@@ -142,9 +144,8 @@ void loop() {
       //delay(10000);
       for (uint8_t i = 0; i < 3; i++) { 
       enc_e[i] = Encoder(0,i);
-      Serial.print((i) + " End Encoder: ");
-      Serial.println(enc_e[i]-enc_s[i]);
-      
+      String enc_string = " End Encoder: " + String(i) + ": " + String(enc_e[i]-enc_s[i]);
+      Serial.println(enc_string);
       }
       Serial.println("---------------");
     }
@@ -159,6 +160,7 @@ void move_all_motors(String command){
     Serial.println(command);
     //variables for a single move    
     int32_t start[3] = {0,0,0};
+    int32_t init_pos[3] = {0,0,0};
     int32_t live_pos[3] = {0,0,0};
     int32_t steps[3] = {0,0,0};
     int32_t target[3] = {0,0,0};
@@ -166,7 +168,7 @@ void move_all_motors(String command){
     int32_t end[3] = {0,0,0};
     float diff[3] = {0,0,0};
     float damp = 0.8;
-    bool reached[3] = {false, false, false};
+    bool allReached = false;
 
     damped_move[0] = extractValue(command, 'X') * damp;
     damped_move[1] = extractValue(command, 'Y') * damp;
@@ -188,6 +190,7 @@ void move_all_motors(String command){
     _GRBL_A.sendGcode(buffer); //- original move function
     _GRBL_A.waitIdle();
     
+    /*
     //Now poll encoder values and compare them with the target position
     for (uint8_t i = 0; i < 3; i++) { 
       end[i] = Encoder(petal,i);
@@ -204,15 +207,19 @@ void move_all_motors(String command){
     
     _GRBL_A.sendGcode(corr_buffer);
     _GRBL_A.waitIdle();
-    
+    */
     
     // loop to check encoder values and stop if reached targets
-    for (uint8_t e = 0; e < 3; e++) {
+    for (uint8_t e = 1; e < 4 && !allReached ; e++) {
+      Serial.print("iteration: ");
+      Serial.println(e);
+      Serial.println("-------------");
     for (uint8_t i = 0; i < 3; i++) { // loop to make more precise corrections to movement
-      start[i] = Encoder(petal,i);
-      steps[i] = (target[i] - start[i]) * damp / enc_ratio;
+      init_pos[i] = Encoder(petal,i);
+      steps[i] = (target[i] - init_pos[i]) * damp / enc_ratio;
     }
     String corr_command = "G1 X" + String(steps[0]) + " Y" + String(steps[1]) + " Z" + String(steps[2]) + " F1200";
+    Serial.println(corr_command);
     //while (!reached[0] || !reached[1] || !reached[2]) {
         char buffer[corr_command.length() + 1];
         corr_command.toCharArray(buffer, sizeof(buffer));
@@ -220,13 +227,20 @@ void move_all_motors(String command){
         _GRBL_A.waitIdle();
     for (uint8_t i = 0; i < 3; i++) {
       live_pos[i] = Encoder(petal, i);
-    if (abs((abs(live_pos[i]) - abs(start[i])) - abs(steps[i])) <= 10) {
-    reached[i] = true;
-    }
-    }
+      Serial.print("livee pos is: ");
+      Serial.println(live_pos[i]);
+      Serial.print("close? - ");
+      Serial.println(abs(abs(live_pos[i]) - abs(target[i])));
+    if (abs(abs(live_pos[i]) - abs(target[i])) <= 10) {
+    //reached[i] = true;
+    allReached = true;
+    Serial.println("Enc Value reached");
+    break;
     }
     
-    
+    }
+    }
+       
 }
 
 
