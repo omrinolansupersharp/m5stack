@@ -89,13 +89,14 @@ uint8_t mod_address_E = 0x5A;
         int petal;
         int pahub_address;
         Module_GRBL* motor;
+        M5Module4EncoderMotor* encoder;
     };
     PetalMapping petalMap[] = {
-        {0,0, &_GRBL_0},
-        {1,0, &_GRBL_1},
-        {2,1, &_GRBL_2},
-        {3,1, &_GRBL_3},
-        {4,2, &_GRBL_4}
+        {0,0, &_GRBL_0, &driverA},
+        {1,0, &_GRBL_1, &driverB},
+        {2,1, &_GRBL_2, &driverC},
+        {3,1, &_GRBL_3, &driverD},
+        {4,2, &_GRBL_4, &driverE}
     };
 
 Unit_RTC RTC;
@@ -109,7 +110,9 @@ unsigned long startTime = millis();
 
 int petal = 0; // startup petal is 0
 int32_t encoder_readings[5][3] = {{0,0,0}, {0,0,0}, {0,0,0}, {0,0,0}, {0,0,0}};
-float pos[5][3];
+float step_pos[5][3];
+int32_t enc_counts[5][3];
+float enc_pos[5][3];
 float initialPos[5][3] = {
     {0.000000, 0.000000, 0.000000},
     {0.000000, 0.000000, 0.000000},
@@ -117,10 +120,10 @@ float initialPos[5][3] = {
     {0.000000, 0.000000, 0.000000},
     {0.000000, 0.000000, 0.000000}
 };
-float conv = 0.004; // conversion between GCode X1 and distance moved by screw
+float conv = 0.128; // conversion between GCode X1 and distance moved by screw
 int wait = 50; //scren refresh time in ms
 float steps_per_rev = 200; // motor steps per one motor revolution
-float enc_counts_per_rev = 8300.0; // encoder counts per one motor revolution
+float enc_ratio = (131072) / (50 * 32 );
 
 void setup() {
     M5.begin();
@@ -171,7 +174,7 @@ void setup() {
 
     tca9548a.selectChannel(0);
     delay(1000);
-    _GRBL_0.Init(&Wire); // No return value to check
+    _GRBL_0.Init(&Wire,200,200,200,36000); // No return value to check
     _GRBL_0.setMode("distance");
     while (!driverA.begin(&Wire1, mod_address_A,21,22)) {
         Serial.println("Encoder A Init faild!");
@@ -179,17 +182,17 @@ void setup() {
     }
     tca9548a.selectChannel(0);
     delay(1000);
-    _GRBL_1.Init(&Wire); // No return value to check
+    _GRBL_1.Init(&Wire,200,200,200,36000); // No return value to check
     _GRBL_1.setMode("distance");
     while (!driverB.begin(&Wire1, mod_address_B,21,22)) {
         Serial.println("Encoder B Init faild!");
         delay(1000);
     }
-    
+    /*
     tca9548a.selectChannel(1);
     delay(1000);
     Wire.begin(21, 22);
-    _GRBL_2.Init(&Wire); // No return value to check
+    _GRBL_2.Init(&Wire,200,200,200,36000); // No return value to check
     _GRBL_2.setMode("distance");
     while (!driverC.begin(&Wire1, mod_address_C,21,22)) {
         Serial.println("Encoder C Init faild!");
@@ -197,7 +200,7 @@ void setup() {
     }
     tca9548a.selectChannel(1);
     delay(1000);
-    _GRBL_3.Init(&Wire); // No return value to check
+    _GRBL_3.Init(&Wire,200,200,200,36000); // No return value to check
     _GRBL_3.setMode("distance");
     while (!driverD.begin(&Wire1, mod_address_D,21,22)) {
         Serial.println("Encoder D Init faild!");
@@ -206,42 +209,25 @@ void setup() {
     tca9548a.selectChannel(2);
     delay(1000);
     Wire.begin(21, 22);
-    _GRBL_4.Init(&Wire); // No return value to check
+    _GRBL_4.Init(&Wire,200,200,200,36000); // No return value to check
     _GRBL_4.setMode("distance");
     while (!driverE.begin(&Wire1, mod_address_E,21,22)) {
         Serial.println("Encoder E Init faild!");
         delay(1000);
     }
-    
+    */
     Serial.begin(115200);
     Serial.println("Setup complete");
 }
 
 void loop() {
-    update(petal,pos);
+    //update(petal,pos);
     String cmd = ""; // Declare cmd at the beginning of the loop
     if (Serial.available()) {
         // Read the serial input
         cmd = Serial.readStringUntil('\n');
         //Serial.println(cmd); 
         //delay(50);      
-    /*
-    switch(cmd[0]) { // different loop structure
-      case 'P': // Change petal
-      petal = cmd[1]-'0';
-      break;
-
-      case 'Q': // Query position
-        {
-          String positionString = "";
-          for (int j = 0; j < 3; ++j) {
-            positionString += String(pos[petal][j], 6);
-            if (j < 2) positionString += ",";
-          }
-          Serial.println(positionString);
-        }
-        break;
-    */
     // changing petal number
     if (cmd[0] == 'P'){
       petal = cmd[1]-'0';
@@ -256,7 +242,9 @@ void loop() {
       //Serial.println("The current position is: ");
       String positionString = "";
       for (int j = 0; j < 3; ++j) {
-          positionString += String(pos[petal][j], 6);
+          float enc_pos[petal][j] = Encoder[petal][j] * conv / enc_ratio; 
+          // positionString += String(pos[petal][j], 6);
+          positionString += String(enc_pos[petal][j],6);
           if (j < 2) positionString += ",";
       }
       Serial.println(positionString);
@@ -264,10 +252,12 @@ void loop() {
 
     // Reset encoder positions to 0
     if (cmd[0] == 'R'){
-      int newValues[5][3] = {{0, 0, 0}, {0, 0, 0}, {0, 0, 0}, {0, 0, 0}, {0, 0, 0}};
+      //int newValues[5][3] = {{0, 0, 0}, {0, 0, 0}, {0, 0, 0}, {0, 0, 0}, {0, 0, 0}};
       for (int i = 0; i < 5; ++i) {
+        tca9548a.selectChannel(petalMap[i].pahub_address);
         for (int j = 0; j < 3; ++j) {
-            pos[i][j] = newValues[i][j];
+            petalMap[i].encoder->setEncoderValue(j,0);
+            //pos[i][j] = newValues[i][j];
         }
       }
       savePosArray(SD, "/pos.txt");
@@ -293,24 +283,31 @@ void loop() {
       int  petal_cmd = cmd[1]-'0';
       int  motor_cmd = cmd[2]-'0';
       int32_t enc  = Encoder(petal_cmd, motor_cmd);
-      Serial.println(enc);
+      //Serial.println(enc);
     }
-    if (cmd[0] == 'M'){ // move motor command
-      
-      move_all_motors(cmd,petal);
-      //Serial.println("Motion finished");
-    }
+
     if (cmd[0] == 'G'){ // move motor command - used for encoder counting
-      int32_t enc_s  = Encoder(0, 0);
-      Serial.print("Start Encoder: ");
-      Serial.println(enc_s);
+      int32_t enc_s[3] = {0,0,0};
+      int32_t enc_e[3] = {0,0,0};
+      for (uint8_t i = 0; i < 3; i++) {  
+      enc_s[i] = Encoder(0,i);
+      String enc_string = " Start Encoder: " + String(i) + ": " + String(enc_s[i]);
+      //Serial.println(enc_string);
+      }
+      //Serial.print("Start Encoder: ");
+      //Serial.println(enc_s);
       //delay(100);
       move_all_motors(cmd,petal);
-      delay(100);
-      int32_t enc_e  = Encoder(0,0);
-      Serial.print("End Encoder: ");
-      Serial.println(enc_e);
+      //delay(10000);
+      for (uint8_t i = 0; i < 3; i++) { 
+      enc_e[i] = Encoder(0,i);
+      pos[petal][i] = enc_e[i];
+      String enc_string = " End Encoder: " + String(i) + ": " + String(enc_e[i]);
+      Serial.println(enc_string);
+      }
+      Serial.println("---------------");
     }
+
     if (cmd[0] == 'V'){ // Save positions to sd card
       savePosArray(SD, "/pos.txt");
     }
@@ -322,79 +319,94 @@ void loop() {
 // FUNCTIONS
 
 void move_all_motors(String command, int petal){
-    // Convert the command into a char array
-    char buffer[command.length() + 1];
-    command.toCharArray(buffer, sizeof(buffer));
-    //Serial.print("Command buffer: ");
-    //Serial.println(buffer); // Debugging statement
-    // extract the position variable from the G command
-    float target_x = extractValue(command, 'X');
-    float target_y = extractValue(command, 'Y');
-    float target_z = extractValue(command, 'Z');
-    int f = extractValue(command, 'F');
-    // Select the correct PAHub address for the selected petal
-    tca9548a.selectChannel(petalMap[petal].pahub_address);
-    //Serial.print("Selected PAHub channel: ");
-    //Serial.println(petalMap[petal].pahub_address); // Debugging statement
-    petalMap[petal].motor->sendGcode(buffer); //- original move function
+  // Select the correct PAHub address for the selected petal
+    //tca9548a.selectChannel(petalMap[petal].pahub_address);
+    //Serial.println(command);
+    //variables for a single move    
+    int32_t start[3] = {0,0,0};
+    int32_t init_pos[3] = {0,0,0};
+    int32_t live_pos[3] = {0,0,0};
+    float steps[3] = {0.0,0.0,0.0};
+    int32_t target[3] = {0,0,0};
+    float damped_move[3] = {0,0,0};
+    int32_t end[3] = {0,0,0};
+    float diff[3] = {0,0,0};
+    float damp = 0.5;
+    int reached[3] = {0,0,0};
+    int sum = 0;
+    bool allReached = false;
 
-    //new move function with encoder catching
-    /*
-    while (true) {
-        float currentPosition_x = Encoder(petal,0); // Read encoder value for motor 0 
-        float currentPosition_y = Encoder(petal,1); // need to add a conversion 
-        float currentPosition_z = Encoder(petal,2);
-        
-        if ((currentPosition_x < target_x) || (currentPosition_y < target_y) || (currentPosition_z < target_z)) {
-            petalMap[petal].motor->setMotor(target_x - currentPosition_x, target_y - currentPosition_y, target_z - currentPosition_z, f); // Move motor relative to current position
-        } 
-        else if ((currentPosition_x > target_x) || (currentPosition_y > target_y) || (currentPosition_z > target_z)) {
-            petalMap[petal].motor->setMotor(currentPosition_x - target_x, currentPosition_y - target_y, currentPosition_z - target_z, f); // Move motor relative to current position
-        } 
-        else {
-            petalMap[petal].motor->setMotor(0, 0, 0, 0); // Stop motor
-            break; // Exit loop
-        }
-        delay(100); // Small delay to prevent overwhelming the I2C bus
+    damped_move[0] = extractValue(command, 'X') * damp;
+    damped_move[1] = extractValue(command, 'Y') * damp;
+    damped_move[2] = extractValue(command, 'Z') * damp;
+    float f = extractValue(command, 'F');
+    
+    for (uint8_t i = 0; i < 3; i++) { 
+      start[i] = Encoder(petal,i);
     }
-    */
 
-    //petalMap[petal].motor->setMotor(x,y,z,f); //use set motor instead of g code
-    //Serial.println("G-code command sent");
+    target[0] = extractValue(command, 'X') * enc_ratio + start[0];
+    target[1] = extractValue(command, 'Y') * enc_ratio + start[1];
+    target[2] = extractValue(command, 'Z') * enc_ratio + start[2];
 
-    /*
-    // Check if the motor is connected by calling the isMotorConnected function
-    if (isMotorConnected(petalMap[petal].motor)) {
-        // Send the command to the selected petal motor
-        petalMap[petal].motor->sendGcode(buffer);
-        Serial.println("G-code command sent"); // Debugging statement
-        //while (!petalMap[petal].motor->readIdle()) {
-          
-        // Wait for motor to become idle before finishing move
-        // we don't wanna do this because we want to return to the loop
-          unsigned long currentMillis = millis();        
-          if (currentMillis - previousMillis >= interval) {
-            previousMillis = currentMillis;
-            Serial.println("Motor is not idle, waiting..."); // Debugging statement
-          }  
-          // Check if timeout period has elapsed
-          if (currentMillis - startTime >= (timeout*30*(x+y+z)/f)){ // add time multiplier for length of move
-            Serial.println("Timeout reached, exiting loop.");
-            break;
-          }
-          
-          //delay(100);
-        //}
-    } else {
-        Serial.println("Motor is not connected"); // Debugging statement
+    //make a new string command that will move 80% of the distance
+    String first_command = "G1 X" + String(damped_move[0]) + " Y" + String(damped_move[1]) + " Z" + String(damped_move[2]) + " F"+ String(f);
+    // iterate over the three axes to check for encoder counts while moving
+    Serial.println(first_command);
+    // Convert the command into a char array
+    char buffer[first_command.length() + 1];
+    first_command.toCharArray(buffer, sizeof(buffer));
+    petalMap[petal].motor->sendGcode(buffer); //- original move function
+    Serial.println(buffer);
+    petalMap[petal].motor->waitIdle();
+    
+    // loop to check encoder values and stop if reached targets
+    for (uint8_t e = 1; e < 20 && !allReached ; e++) {
+      Serial.print("iteration: ");
+      Serial.println(e);
+      Serial.println("-------------");
+      delay(20);
+    for (uint8_t i = 0; i < 3; i++) { // loop to make more precise corrections to movement
+      init_pos[i] = Encoder(petal,i);
+      if (reached[i] = 0){
+        steps[i] = 0;
+      }
+      else {
+        steps[i] = (target[i] - init_pos[i]) * damp / enc_ratio;
+      }
+    }
+    String corr_command = "G1 X" + String(steps[0]) + " Y" + String(steps[1]) + " Z" + String(steps[2]) + " F" + String(f);
+    Serial.println(corr_command);
+    //while (!reached[0] || !reached[1] || !reached[2]) {
+        char buffer[corr_command.length() + 1];
+        corr_command.toCharArray(buffer, sizeof(buffer));
+        petalMap[petal].motor->sendGcode(buffer); //- original move function
+        petalMap[petal].motor->waitIdle();
+    for (uint8_t i = 0; i < 3; i++) {
+      live_pos[i] = Encoder(petal, i);
+      Serial.print("livee pos is: ");
+      Serial.print(live_pos[i]);
+      Serial.print(" ,target is: ");
+      Serial.println(target [i]);
+      //Serial.print("close? - ");
+      //Serial.println(live_pos[i] - target[i]);
+    if (abs(live_pos[i] - target[i]) <= 10) {
+    reached[i] = 1;
+    String printstring =  String(i) + " motor reached target";
+    Serial.println(printstring);
+    
+    // now need to add it where it keeps on looping round until they have all been done
     } 
-    */
-    delay(20);
-    //update pos variable
-    pos[petal][0] += (target_x * conv);
-    pos[petal][1] += (target_y * conv);
-    pos[petal][2] += (target_z * conv);
-    //savePosArray(SD, "/pos.txt");
+    }
+    // here check if all of the motors have reached the endpoints 
+    sum = reached[0] + reached[1] + reached[2];
+    if (sum >= 3){
+    allReached = true;
+    Serial.println("Enc Value reached");
+    break;
+    }
+    }
+
 }
 
 /*
@@ -412,10 +424,18 @@ void set_all_motors(int x = 0, int y = 0, int z = 0, int speed = 300, int petal 
 }
 */
 
-int32_t Encoder(int petal, int motor){ // get encoder value
 
-  tca9548a.selectChannel(petalMap[petal].pahub_address);
-  encoder_readings[petal][motor] = driverA.getEncoderValue(motor);
+
+
+int32_t Encoder(int petal, int motor){ // get encoder value
+  if (petal == 0){
+  //tca9548a.selectChannel(petalMap[petal].pahub_address);
+  encoder_readings[0][motor] = driverA.getEncoderValue(motor);
+  }
+  //agnostic encoder readings
+  //tca9548a.selectChannel(petalMap[petal].pahub_address);
+  //encoder_readings[petal][motor] = petalMap[petal].encoder->getEncoderValue(motor);
+  
   // here apply conversion to make a float out of an int32_t
   //for (int i = 0; i < 5; i++) {
   //      for (int j = 0; j < 3; j++) {
@@ -448,30 +468,6 @@ bool isMotorConnected(Module_GRBL* motor) { // this is currently not working - n
     return false; // After maxAttempts, conclude the motor is not connected
 }
 
-void IdleChecker(int petal){
-    int petal_cmd = petal; // (cmd[1] - '0');
-    tca9548a.selectChannel(petalMap[petal].pahub_address);
-    if (petal_cmd >= 0 && petal_cmd < 5) {
-        // Check if the motor is connected
-        if (petalMap[petal_cmd].motor != nullptr) {
-            auto idleStatus = petalMap[petal_cmd].motor->readIdle();
-            // Check if idleStatus is a boolean
-            if (idleStatus == 0 || idleStatus == 1) {
-                bool isIdle = (idleStatus == 0); // Convert to boolean
-                Serial.println(isIdle);
-                //String idleStatusString = isIdle ? "true" : "false"; // Convert to string
-                //Serial.println("Motor idle status: " + idleStatusString); // Debugging statement
-                //delay(10);
-            } else {
-                //Serial.println("Invalid return type from readIdle()"); // Error handling
-            }
-        } else {
-            //Serial.println("Motor not connected"); // Motor connection check
-        }
-    } else {
-        //Serial.println("Invalid petal command"); // Debugging statement
-    }
-    }
 
 float extractValue(String command, char axis) {
   int startIndex = command.indexOf(axis);
@@ -621,6 +617,8 @@ void loadPosArray(fs::FS &fs, const char * path) {
 
     stringToPosArray(data, pos);
 }
+
+
 
 
 
