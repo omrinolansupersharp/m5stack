@@ -615,4 +615,3 @@ void loadPosArray(fs::FS &fs, const char * path) {
 
     stringToPosArray(data, enc_pos);
 }
-
