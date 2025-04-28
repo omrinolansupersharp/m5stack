@@ -218,8 +218,9 @@ void setup() {
 }
 
 void loop() {
-    //update(petal,pos);
+    //update(petal,step_pos);
     String cmd = ""; // Declare cmd at the beginning of the loop
+    bool connected = isMotorConnected(&_GRBL_1);
     if (Serial.available()) {
         // Read the serial input
         cmd = Serial.readStringUntil('\n');
@@ -295,7 +296,7 @@ void loop() {
       for (uint8_t i = 0; i < 3; i++) { 
       enc_e[i] = Encoder(0,i);
       enc_pos[petal][i] = enc_e[i];
-      String enc_string = " End Encoder: " + String(i) + ": " + String(enc_e[i]);
+      String enc_string = " End Encoder " + String(i) + ": " + String(enc_e[i]);
       Serial.println(enc_string);
       }
       Serial.println("---------------");
@@ -305,7 +306,8 @@ void loop() {
       savePosArray(SD, "/pos.txt");
     }
    
-}   
+}
+Serial.println("command finished back to loop");  
 }
 // END OF LOOP
 
@@ -351,6 +353,7 @@ void move_all_motors(String command, int petal){
     first_command.toCharArray(buffer, sizeof(buffer));
 
     _GRBL_0.sendGcode(buffer);
+    _GRBL_0.waitIdle();
     /*
     petalMap[0].motor->sendGcode(buffer); //- original move function
     Serial.println(buffer);
@@ -421,7 +424,8 @@ void set_all_motors(int x = 0, int y = 0, int z = 0, int speed = 300, int petal 
 */
 
 
-
+//Most recent code 
+// is before
 
 int32_t Encoder(int petal, int motor){ // get encoder value
   if (petal == 0){
@@ -455,8 +459,8 @@ bool isMotorConnected(Module_GRBL* motor) { // this is currently not working - n
 
         // Read the response from the motor
         String response = motor->readLine();
-        //Serial.print("Motor response: ");
-        //Serial.println(response); // Debugging statement
+        Serial.print("Motor response: ");
+        Serial.println(response); // Debugging statement
 
         // Check if the response contains "ok" and does not contain corrupted data
         if (response.length() > 0 && response.indexOf("�") == -1 ) { //&& response.indexOf("ok") != -1
