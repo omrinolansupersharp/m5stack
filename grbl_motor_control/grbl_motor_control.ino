@@ -63,8 +63,8 @@ ClosedCube::Wired::TCA9548A tca9548a;
 // if there is any hardware change then we need to adapt this too
 Module_GRBL _GRBL_0 = Module_GRBL(0x70); // defined by switch 4 in the back of the board
 Module_GRBL _GRBL_1 = Module_GRBL(0x71);
-Module_GRBL _GRBL_2 = Module_GRBL(0x71);
-Module_GRBL _GRBL_3 = Module_GRBL(0x70);
+Module_GRBL _GRBL_2 = Module_GRBL(0x70);
+Module_GRBL _GRBL_3 = Module_GRBL(0x71);
 Module_GRBL _GRBL_4 = Module_GRBL(0x71);
 int pa_hub_address_0 = 0;
 int pa_hub_address_1 = 0;
@@ -278,13 +278,13 @@ void loop() {
     if (cmd[0] == 'G'){ // move motor command - used for encoder counting
       int32_t enc_s[3] = {0,0,0};
       int32_t enc_e[3] = {0,0,0};
-      Serial.println("Start: ");
+      //Serial.println("Start: ");
       //Serial.print("Start Encoder: ");
       //Serial.println(enc_s);
       //delay(100);
       move_all_motors(cmd,petal);
       //delay(1000);
-      Serial.println("End:");
+      //Serial.println("End:");
       enc_e[0] = Encoder(0,0); // This is added to correct for the wierd bug where:
                                // encoder A seems to not update on the first read 
                                // after a move
@@ -332,9 +332,9 @@ void move_all_motors(String command, int petal){
 
     // loop to check encoder values and stop if reached targets
     for (uint8_t e = 1; e < 11 && !allReached ; e++) {
-      Serial.print("iteration: ");
-      Serial.println(e);
-      Serial.println("-------------");
+      //Serial.print("iteration: ");
+      //Serial.println(e);
+      //Serial.println("-------------");
     for (uint8_t i = 0; i < 3; i++) { // loop to make more precise corrections to movement
       init_pos[i] = Encoder(petal,i);
       if (reached[i] = 0){
@@ -347,21 +347,19 @@ void move_all_motors(String command, int petal){
     String corr_command = "G1 X" + String(steps[0]) + " Y" + String(steps[1]) + " Z" + String(steps[2]) + " F" + String(f);
     char corr_buffer[corr_command.length() + 2];
     corr_command.toCharArray(corr_buffer, sizeof(corr_buffer));
-    Serial.println(corr_buffer);
+    //Serial.println(corr_buffer);
     tca9548a.selectChannel(petalMap[petal].pahub_address);
     petalMap[petal].motor->sendGcode(corr_buffer); 
     petalMap[petal].motor->waitIdle();
     int32_t dummy = Encoder(0,0);
     for (uint8_t i = 0; i < 3; i++) {
       live_pos[i] = Encoder(petal, i);
-      Serial.print("livee pos is: ");
-      Serial.print(live_pos[i]);
-      Serial.print(" ,target is: ");
-      Serial.println(target [i]);
+      //String printstring = "Live posss: " + String(live_pos[i]) + ", target is: " + String(target[i]);
+      //Serial.println(printstring);
       if (abs(live_pos[i] - target[i]) <= 10) {
       reached[i] = 1;
-      String printstring =  String(i) + " motor reached target";
-      Serial.println(printstring);
+      //String printstring =  String(i) + " motor reached target";
+      //Serial.println(printstring);
       // now need to add it where it keeps on looping round until they have all been done
       } 
     }
@@ -369,7 +367,7 @@ void move_all_motors(String command, int petal){
     sum = reached[0] + reached[1] + reached[2];
     if (sum >= 3){
     allReached = true;
-    Serial.println("Enc Value reached");
+    //Serial.println("Enc Value reached");
     break;
     }
     }
@@ -378,15 +376,13 @@ void move_all_motors(String command, int petal){
 
 
 int32_t Encoder(int petal, int motor){ // get encoder value
-  delay(20);
   //tca9548a.selectChannel(petalMap[petal].pahub_address);
   //enc_counts[0][motor] = petalMap[petal].encoder->getEncoderValue(motor);
   enc_counts[petal][motor] = petalMap[petal].encoder->getEncoderValue(motor);
   enc_pos[petal][motor] = enc_counts[petal][motor] * enc_to_extension_ratio;
-  Serial.print("Enc counts are: ");
-  Serial.print(String(enc_counts[petal][motor]));
-  Serial.print(" leading to a position of: ");
-  Serial.println(String(enc_pos[petal][motor]));
+  //String printstring = "Enc counts are: " + String(enc_counts[petal][motor]) + " leading to a position of: " + String(enc_pos[petal][motor]);
+  //Serial.println(printstring);
+  
   //agnostic encoder readings
   //tca9548a.selectChannel(petalMap[petal].pahub_address);
   //enc_counts[petal][motor] = petalMap[petal].encoder->getEncoderValue(motor);
