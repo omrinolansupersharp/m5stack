@@ -115,10 +115,15 @@ float step_pos[5][3];
 int32_t enc_counts[5][3];
 float enc_pos[5][3];
 float initialPos[5][3];
-float conv = 0.128; // conversion between GCode X1 and distance moved by screw
-int wait = 50; //scren refresh time in ms
+
 float steps_per_rev = 200; // motor steps per one motor revolution
-float enc_ratio = (131072) / (50 * 32 ); //ratio betweeen encoder count and g
+float screw_pitch = 0.25; //(mm)
+int microsteps = 32; //microsteps per full step
+int gear_ratio = 50; // 50:1 for motor movement to screw turn
+int32_t encoder_counts_per_rev = 131072;
+float enc_to_motor_ratio = (encoder_counts_per_rev) / (gear_ratio * microsteps ); //ratio betweeen encoder count and g code
+float enc_to_extension_ratio = screw_pitch / (encoder_counts_per_rev);
+float conv = 0.128; // conversion between GCode X1 and distance moved by screw
 
 void setup() {
     M5.begin();
@@ -249,7 +254,7 @@ void loop() {
             //pos[i][j] = newValues[i][j];
         }
       }
-      savePosArray(SD, "/pos.txt");
+      //savePosArray(SD, "/pos.txt");
     }  
 
     // Set a specific encoder position e.g. "S(petal)(motor)(position float)
@@ -269,27 +274,25 @@ void loop() {
       int32_t enc  = Encoder(petal_cmd, motor_cmd);
       Serial.println(enc);
     }
-    
+
     if (cmd[0] == 'G'){ // move motor command - used for encoder counting
       int32_t enc_s[3] = {0,0,0};
       int32_t enc_e[3] = {0,0,0};
-      for (uint8_t i = 0; i < 3; i++) {  
-      enc_s[i] = Encoder(petal,i);
-      String enc_string = " Start Encoder: " + String(i) + ": " + String(enc_s[i]);
-      //Serial.println(enc_string);
-      }
+      Serial.println("Start: ");
       //Serial.print("Start Encoder: ");
       //Serial.println(enc_s);
       //delay(100);
       move_all_motors(cmd,petal);
-      //delay(10000);
+      //delay(1000);
+      Serial.println("End:");
+      enc_e[0] = Encoder(0,0); // This is added to correct for the wierd bug where:
+                               // encoder A seems to not update on the first read 
+                               // after a move
       for (uint8_t i = 0; i < 3; i++) { 
-      enc_e[i] = Encoder(0,i);
-      enc_pos[petal][i] = enc_e[i];
-      String enc_string = " End Encoder " + String(i) + ": " + String(enc_e[i]);
-      Serial.println(enc_string);
+      enc_e[i] = Encoder(petal,i);
       }
-      Serial.println("---------------");
+      Serial.println("-------done--------");
+      
     }
 
 
@@ -324,9 +327,9 @@ void move_all_motors(String command, int petal){
     for (uint8_t i = 0; i < 3; i++) {
       start[i] = Encoder(petal,i);
     }
-    target[0] = extractValue(command, 'X') * enc_ratio + start[0];
-    target[1] = extractValue(command, 'Y') * enc_ratio + start[1];
-    target[2] = extractValue(command, 'Z') * enc_ratio + start[2];
+    target[0] = extractValue(command, 'X') * enc_to_motor_ratio + start[0];
+    target[1] = extractValue(command, 'Y') * enc_to_motor_ratio + start[1];
+    target[2] = extractValue(command, 'Z') * enc_to_motor_ratio + start[2];
     
     // Convert the command into a char array
     char buffer[command.length() + 1];
@@ -336,6 +339,7 @@ void move_all_motors(String command, int petal){
     tca9548a.selectChannel(petalMap[petal].pahub_address);
     petalMap[petal].motor->sendGcode(buffer); //- original move function
     petalMap[petal].motor->waitIdle();
+    delay(500);
     //Serial.println("motion completed");
     /*
     // loop to check encoder values and stop if reached targets
@@ -350,7 +354,7 @@ void move_all_motors(String command, int petal){
         steps[i] = 0;
       }
       else {
-        steps[i] = (target[i] - init_pos[i]) * damp / enc_ratio;
+        steps[i] = (target[i] - init_pos[i]) * damp / enc_to_motor_ratio;
       }
     }
     String corr_command = "G1 X" + String(steps[0]) + " Y" + String(steps[1]) + " Z" + String(steps[2]) + " F" + String(f);
@@ -389,12 +393,15 @@ void move_all_motors(String command, int petal){
 
 
 int32_t Encoder(int petal, int motor){ // get encoder value
-  if (petal == 0){
+  delay(20);
   //tca9548a.selectChannel(petalMap[petal].pahub_address);
   //enc_counts[0][motor] = petalMap[petal].encoder->getEncoderValue(motor);
   enc_counts[0][motor] = driver0.getEncoderValue(motor);
-  enc_pos[0][motor] = enc_counts[0][motor] * conv / enc_ratio;
-  }
+  enc_pos[0][motor] = enc_counts[0][motor] * enc_to_extension_ratio;
+  Serial.print("Enc counts are: ");
+  Serial.print(String(enc_counts[0][motor]));
+  Serial.print(" leading to a position of: ");
+  Serial.println(String(enc_pos[0][motor]));
   //agnostic encoder readings
   //tca9548a.selectChannel(petalMap[petal].pahub_address);
   //enc_counts[petal][motor] = petalMap[petal].encoder->getEncoderValue(motor);
@@ -453,7 +460,7 @@ void readpos(float pos[5][3]) {
   preferences.end(); // Close preferences
 }
 
-void update(int petal,float pos[5][3]){
+void update(int petal,float enc_pos[5][3]){
   // Clear the area where the values are printed
   M5.Lcd.fillRect(20, 80, 200, 20, BLACK); // Clear petal value
   M5.Lcd.fillRect(20, 140, 60, 20, BLACK); // Clear pos[petal][0]
@@ -464,12 +471,12 @@ void update(int petal,float pos[5][3]){
   M5.Lcd.setCursor(20, 80);  
   M5.Lcd.print(petal);
   M5.Lcd.setCursor(20, 140);  
-  M5.Lcd.print(pos[petal][0],6);
+  M5.Lcd.print(enc_pos[petal][0],4);
   M5.Lcd.setCursor(120, 140);
-  M5.Lcd.print(pos[petal][1],6);
+  M5.Lcd.print(enc_pos[petal][1],4);
   M5.Lcd.setCursor(220, 140);
-  M5.Lcd.print(pos[petal][2],6);
-  delay(10);
+  M5.Lcd.print(enc_pos[petal][2],4);
+  delay(20);
 }
 
 // read file from sd card
