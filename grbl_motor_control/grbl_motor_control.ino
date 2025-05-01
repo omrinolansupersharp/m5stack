@@ -218,7 +218,8 @@ void loop() {
     if (Serial.available()) {
         // Read the serial input
         cmd = Serial.readStringUntil('\n');
-        //Serial.println(cmd); 
+        Serial.print("Command recieved");
+        Serial.println(cmd); 
         //delay(50);      
         
     // changing petal number
@@ -242,6 +243,8 @@ void loop() {
           if (j < 2) positionString += ",";
       }
       Serial.println(positionString);
+      Serial.println(positionString);
+      Serial.flush(); 
     }
 
     // Reset encoder positions to 0
@@ -263,7 +266,8 @@ void loop() {
       int motor_cmd = cmd[2]-'0';
       String valueString = cmd.substring(3);
       float newValue = valueString.toFloat();
-      pos[petal_cmd][motor_cmd] = newValue;
+      //add setencodervalue here
+      //pos[petal_cmd][motor_cmd] = newValue;
       savePosArray(SD, "/pos.txt");
     } 
 
