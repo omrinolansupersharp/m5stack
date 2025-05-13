@@ -5,6 +5,8 @@ Uses the Arduino IDE
 Needs an m5core with usb connection to computer to run
 
 ## Projects
-- Hibiscus - deployment and retraction
+- Hibiscus - Deployment: M5Stack_Hibiscus_workingpaths
+- Hibiscus - Metrology: grbl_motor_control.ino
+- 
 - Hibuscus - Actuator controls _rnd_ifs_v3_
 - CubeSat - demo deployment and retraction 
