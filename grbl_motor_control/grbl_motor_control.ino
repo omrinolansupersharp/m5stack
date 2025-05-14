@@ -121,9 +121,9 @@ float screw_pitch = 0.25; //(mm)
 int microsteps = 32; //microsteps per full step
 int gear_ratio = 50; // 50:1 for motor movement to screw turn
 int32_t encoder_counts_per_rev = 131072;
-float enc_to_motor_ratio = (encoder_counts_per_rev) / (gear_ratio * microsteps ); //ratio betweeen encoder count and g code
-float enc_to_extension_ratio = screw_pitch / (encoder_counts_per_rev);
-float conv = 0.128; // conversion between GCode X1 and distance moved by screw
+float encoder_counts_over_motor_command = (encoder_counts_per_rev) / (gear_ratio * microsteps ); //ratio betweeen encoder count and g code
+float extension_over_encoder_counts = screw_pitch / (encoder_counts_per_rev);
+float motor_command_over_extension = (microsteps * gear_ratio)  / screw_pitch;
 
 void setup() {
     M5.begin();
@@ -169,7 +169,7 @@ void setup() {
     delay(1000);
     _GRBL_0.Init(&Wire,200,200,200,36000); // No return value to check
     _GRBL_0.setMode("distance");
-    while (!driver0.begin(&Wire1, mod_address_0,21,22)) {
+    while (!driver0.begin(&Wire, mod_address_0,21,22)) {
         Serial.println("Encoder A Init faild!");
         delay(1000);
     }
@@ -177,17 +177,17 @@ void setup() {
     delay(1000);
     _GRBL_1.Init(&Wire,200,200,200,36000); // No return value to check
     _GRBL_1.setMode("distance");
-    while (!driver1.begin(&Wire1, mod_address_1,21,22)) {
+    while (!driver1.begin(&Wire, mod_address_1,21,22)) {
         Serial.println("Encoder B Init faild!");
         delay(1000);
     }
-    /*
+    
     tca9548a.selectChannel(1);
     delay(1000);
     Wire.begin(21, 22);
     _GRBL_2.Init(&Wire,200,200,200,36000); // No return value to check
     _GRBL_2.setMode("distance");
-    while (!driver2.begin(&Wire1, mod_address_2,21,22)) {
+    while (!driver2.begin(&Wire, mod_address_2,21,22)) {
         Serial.println("Encoder C Init faild!");
         delay(1000);
     }
@@ -195,7 +195,7 @@ void setup() {
     delay(1000);
     _GRBL_3.Init(&Wire,200,200,200,36000); // No return value to check
     _GRBL_3.setMode("distance");
-    while (!driver3.begin(&Wire1, mod_address_3,21,22)) {
+    while (!driver3.begin(&Wire, mod_address_3,21,22)) {
         Serial.println("Encoder D Init faild!");
         delay(1000);
     }
@@ -204,11 +204,11 @@ void setup() {
     Wire.begin(21, 22);
     _GRBL_4.Init(&Wire,200,200,200,36000); // No return value to check
     _GRBL_4.setMode("distance");
-    while (!driver4.begin(&Wire1, mod_address_4,21,22)) {
+    while (!driver4.begin(&Wire, mod_address_4,21,22)) {
         Serial.println("Encoder E Init faild!");
         delay(1000);
     }
-    */
+    
     Serial.begin(115200);
     Serial.println("Setup complete");
 }
@@ -218,8 +218,9 @@ void loop() {
     if (Serial.available()) {
         // Read the serial input
         cmd = Serial.readStringUntil('\n');
-        Serial.print("Command recieved");
-        Serial.println(cmd); 
+        //delay(50);
+        //Serial.print("Command recieved: ");
+        //Serial.println(cmd); 
         //delay(50);      
         
     // changing petal number
@@ -234,6 +235,7 @@ void loop() {
     // Query position - returns the three encoder values of the active petal
     if (cmd[0] == 'Q'){
       //Serial.println("The current position is: ");
+      //Serial.println(enc_pos[petal][0]);
       String positionString = "";
       for (int j = 0; j < 3; ++j) {
           enc_counts[petal][j] = Encoder(petal,j);
@@ -243,7 +245,7 @@ void loop() {
           if (j < 2) positionString += ",";
       }
       Serial.println(positionString);
-      Serial.println(positionString);
+      //Serial.println(positionString);
       Serial.flush(); 
     }
 
@@ -289,14 +291,18 @@ void loop() {
       move_all_motors(cmd,petal);
       //delay(1000);
       //Serial.println("End:");
-      enc_e[0] = Encoder(0,0); // This is added to correct for the wierd bug where:
-                               // encoder A seems to not update on the first read 
-                               // after a move
+     // Double encoder count is added to correct for the wierd bug where:
+     // encoder A seems to not update on the first read 
+     
+      // after a move
       for (uint8_t i = 0; i < 3; i++) { 
       enc_e[i] = Encoder(petal,i);
+      enc_e[i] = Encoder(petal,i);
       }
-      Serial.println("-------done--------");
-      
+      //Serial.println("-------done--------");
+      //print in a serial command when finished move
+      Serial.println("D");
+      Serial.flush();
     }
 
 
@@ -319,23 +325,23 @@ void move_all_motors(String command, int petal){
     float damped_move[3] = {0,0,0};
     int32_t end[3] = {0,0,0};
     float diff[3] = {0,0,0};
-    float damp = 0.5;
+    float damp = 1.0;
     int reached[3] = {0,0,0};
     int sum = 0;
     bool allReached = false;
     for (uint8_t i = 0; i < 3; i++) {
       start[i] = Encoder(petal,i);
     }
-    damped_move[0] = extractValue(command, 'X') * enc_to_motor_ratio * damp;
-    damped_move[1] = extractValue(command, 'Y') * enc_to_motor_ratio * damp;
-    damped_move[2] = extractValue(command, 'Z') * enc_to_motor_ratio * damp;
+    damped_move[0] = extractValue(command, 'X')  * damp / extension_over_encoder_counts;
+    damped_move[1] = extractValue(command, 'Y')  * damp / extension_over_encoder_counts;
+    damped_move[2] = extractValue(command, 'Z')  * damp / extension_over_encoder_counts;
     float f = extractValue(command, 'F');
-    target[0] = extractValue(command, 'X') * enc_to_motor_ratio + start[0];
-    target[1] = extractValue(command, 'Y') * enc_to_motor_ratio + start[1];
-    target[2] = extractValue(command, 'Z') * enc_to_motor_ratio + start[2];
+    target[0] = extractValue(command, 'X') / extension_over_encoder_counts + start[0];
+    target[1] = extractValue(command, 'Y') / extension_over_encoder_counts + start[1];
+    target[2] = extractValue(command, 'Z') / extension_over_encoder_counts + start[2];
 
     // loop to check encoder values and stop if reached targets
-    for (uint8_t e = 1; e < 11 && !allReached ; e++) {
+    for (uint8_t e = 1; e < 3 && !allReached ; e++) {
       //Serial.print("iteration: ");
       //Serial.println(e);
       //Serial.println("-------------");
@@ -345,7 +351,7 @@ void move_all_motors(String command, int petal){
         steps[i] = 0;
       }
       else {
-        steps[i] = (target[i] - init_pos[i]) * damp / enc_to_motor_ratio;
+        steps[i] = (target[i] - init_pos[i]) * damp / encoder_counts_over_motor_command;
       }
     }
     String corr_command = "G1 X" + String(steps[0]) + " Y" + String(steps[1]) + " Z" + String(steps[2]) + " F" + String(f);
@@ -375,7 +381,7 @@ void move_all_motors(String command, int petal){
     break;
     }
     }
-    
+   
 }
 
 
@@ -383,7 +389,7 @@ int32_t Encoder(int petal, int motor){ // get encoder value
   //tca9548a.selectChannel(petalMap[petal].pahub_address);
   //enc_counts[0][motor] = petalMap[petal].encoder->getEncoderValue(motor);
   enc_counts[petal][motor] = petalMap[petal].encoder->getEncoderValue(motor);
-  enc_pos[petal][motor] = enc_counts[petal][motor] * enc_to_extension_ratio;
+  enc_pos[petal][motor] = enc_counts[petal][motor] * extension_over_encoder_counts;
   //String printstring = "Enc counts are: " + String(enc_counts[petal][motor]) + " leading to a position of: " + String(enc_pos[petal][motor]);
   //Serial.println(printstring);
   
@@ -474,7 +480,7 @@ void readFile(fs::FS &fs, const char * path){
         return;
     }
 
-    Serial.print("Read from file: ");
+    //Serial.print("Read from file: ");
     while(file.available()){
         Serial.write(file.read());
     }
